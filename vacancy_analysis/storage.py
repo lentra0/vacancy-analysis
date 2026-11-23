@@ -113,6 +113,27 @@ class Storage:
                 DELETE FROM raw_vacancies WHERE source = 'hh' AND external_id = ?
             """, (vacancy_id,))
 
+    def has_for_query(self, query: HHQuery, vacancy_id: str) -> bool:
+        return self.db.execute("""
+            SELECT 1 FROM runs
+            JOIN run_vacancies ON run_vacancies.run_id = runs.id
+            WHERE query_key = ? AND source = 'hh' AND external_id = ?
+            LIMIT 1
+        """, (query.key, vacancy_id)).fetchone() is not None
+
+    def vacancies(self, limit: int | None) -> list[dict]:
+        rows = self.db.execute("""
+            SELECT * FROM raw_vacancies
+            ORDER BY fetched_at DESC, source, external_id
+            LIMIT ?
+        """, (-1 if limit is None else limit,))
+        result = []
+        for row in rows:
+            record = dict(row)
+            record["metadata"] = json.loads(record["metadata"])
+            result.append(record)
+        return result
+
     def runs(self, limit: int) -> list[dict]:
         rows = self.db.execute("SELECT * FROM runs ORDER BY started_at DESC LIMIT ?", (limit,))
         results = []

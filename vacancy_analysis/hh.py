@@ -21,6 +21,10 @@ class HHError(RuntimeError):
         self.status = status
 
 
+class HHBlocked(HHError):
+    pass
+
+
 @dataclass(frozen=True)
 class Window:
     start: datetime
@@ -51,6 +55,8 @@ class Collection:
     saved: int = 0
     unavailable: int = 0
     archived: int = 0
+    skipped: int = 0
+    blocked: bool = False
     errors: dict[str, str] = field(default_factory=dict)
 
 
