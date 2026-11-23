@@ -16,7 +16,8 @@ from .sources.hh import LOGIN, SITE, HHWebClient, browser_tab, load_page
 from .orchestrator import collect
 from .storage import Storage
 
-DEFAULT_HH_PROFILE = Path("data/hh-profile")
+DATA_DIRECTORY = Path("vacancy-analysis-data")
+LEGACY_DATA_DIRECTORY = Path("data")
 
 
 def positive_int(value: str) -> int:
@@ -30,6 +31,14 @@ def print_json(value: dict | list) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2), flush=True)
 
 
+def data_path(name: str) -> Path:
+    preferred = DATA_DIRECTORY / name
+    legacy = LEGACY_DATA_DIRECTORY / name
+    if not preferred.exists() and legacy.exists():
+        return legacy
+    return preferred
+
+
 def confirm_hh_check(progress: TerminalProgress, reason: str) -> bool:
     progress.clear()
     print(f"{reason}. Пройдите проверку в Chromium и нажмите Enter.", file=sys.stderr, flush=True)
@@ -41,16 +50,17 @@ def confirm_hh_check(progress: TerminalProgress, reason: str) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    default_profile = data_path("hh-profile")
     parser = argparse.ArgumentParser(description="Анализ рынка вакансий")
-    parser.add_argument("--db", type=Path, default=Path("data/vacancies.sqlite3"),
-                        help="путь к SQLite (по умолчанию data/vacancies.sqlite3)")
+    parser.add_argument("--db", type=Path, default=data_path("vacancies.sqlite3"),
+                        help="путь к SQLite (по умолчанию vacancy-analysis-data/vacancies.sqlite3)")
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="запустить сбор HH один раз")
     watch = commands.add_parser("watch", help="повторять сбор HH по интервалу")
     for command in (run, watch):
         command.add_argument("--text", required=True, help="поисковый запрос")
         command.add_argument("--area", help="ID региона HH")
-        command.add_argument("--profile", type=Path, help="каталог профиля Chromium (по умолчанию data/hh-profile, если есть)")
+        command.add_argument("--profile", type=Path, help="каталог профиля Chromium (по умолчанию vacancy-analysis-data/hh-profile)")
         command.add_argument("--headed", action="store_true", help="показать окно Chromium")
         command.add_argument("--limit", type=positive_int, default=25, help="до N карточек (по умолчанию 25)")
         command.add_argument("--pages", type=positive_int, default=3, help="до N страниц (по умолчанию 3)")
@@ -58,8 +68,8 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--delay", type=positive_int, default=5, help="пауза в секундах (по умолчанию 5)")
     watch.add_argument("--interval", required=True, type=positive_int, help="секунды после завершения запуска")
     login = commands.add_parser("login", help="войти в HH через Chromium")
-    login.add_argument("--profile", type=Path, default=DEFAULT_HH_PROFILE,
-                       help="каталог профиля (по умолчанию data/hh-profile)")
+    login.add_argument("--profile", type=Path, default=default_profile,
+                       help="каталог профиля (по умолчанию vacancy-analysis-data/hh-profile)")
     runs = commands.add_parser("runs", help="показать результаты запусков")
     runs.add_argument("--limit", type=positive_int, default=10, help="число запусков (по умолчанию 10)")
     export = commands.add_parser("export", help="выгрузить вакансии в JSON")
@@ -87,8 +97,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             query = SearchQuery(args.text.strip(), args.area)
             profile = args.profile
-            if profile is None and (args.headed or DEFAULT_HH_PROFILE.is_dir()):
-                profile = DEFAULT_HH_PROFILE
+            if profile is None and (args.headed or default_profile.is_dir()):
+                profile = default_profile
             progress = stack.enter_context(TerminalProgress(sys.stderr))
             progress.show("Запускаю Chromium")
             page = stack.enter_context(browser_tab(profile, args.headed))

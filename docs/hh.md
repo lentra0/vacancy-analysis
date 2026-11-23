@@ -7,14 +7,14 @@
 Скачайте файл для своей системы из [Releases](https://github.com/lentra0/vacancy-analysis/releases) и подставьте его версию в команды ниже. Chromium входит в сборку. На Linux нужны его системные библиотеки.
 
 ```powershell
-$version = 'v0.1.7'
+$version = 'v0.1.8'
 $app = ".\vacancy-analysis-${version}-windows-x64.exe"
 & $app run --text DevOps --area 1 --limit 5
 & $app export > vacancies.json
 ```
 
 ```sh
-version=v0.1.7
+version=v0.1.8
 app="./vacancy-analysis-${version}-linux-x64"
 chmod +x "$app"
 "$app" run --text DevOps --area 1 --limit 5
@@ -38,17 +38,17 @@ python -m vacancy_analysis export > vacancies.json
 
 | Где | Параметр | Что задаёт |
 | --- | --- | --- |
-| Перед командой | `--db ПУТЬ` | Файл SQLite. По умолчанию `data/vacancies.sqlite3` |
+| Перед командой | `--db ПУТЬ` | Файл SQLite. По умолчанию `vacancy-analysis-data/vacancies.sqlite3` |
 | `run`, `watch` | `--text ЗАПРОС` | Поисковый запрос. Обязательный |
 | `run`, `watch` | `--area ID` | Регион HH. Например, `1` для Москвы |
 | `run`, `watch` | `--limit N` | Сколько карточек можно открыть за запуск. По умолчанию 25 |
 | `run`, `watch` | `--pages N` | Сколько страниц выдачи просмотреть. По умолчанию 3 |
 | `run`, `watch` | `--period ДНИ` | Период выдачи HH. Допустимы 1, 3, 7 и 30. По умолчанию 1 |
 | `run`, `watch` | `--delay СЕКУНДЫ` | Пауза между открытиями страниц. По умолчанию 5 |
-| `run`, `watch` | `--profile КАТАЛОГ` | Профиль Chromium. По умолчанию подхватывается `data/hh-profile` |
+| `run`, `watch` | `--profile КАТАЛОГ` | Профиль Chromium. По умолчанию подхватывается `vacancy-analysis-data/hh-profile` |
 | `run`, `watch` | `--headed` | Показать Chromium и дать пройти проверку HH вручную |
 | `watch` | `--interval СЕКУНДЫ` | Пауза после каждого запуска. Первый сбор начинается сразу |
-| `login` | `--profile КАТАЛОГ` | Профиль для ручного входа в HH. По умолчанию `data/hh-profile` |
+| `login` | `--profile КАТАЛОГ` | Профиль для ручного входа в HH. По умолчанию `vacancy-analysis-data/hh-profile` |
 | `runs` | `--limit N` | Сколько последних запусков показать. По умолчанию 10 |
 | `export` | `--limit N` | Сколько свежих карточек выгрузить. По умолчанию все |
 
@@ -57,6 +57,8 @@ python -m vacancy_analysis export > vacancies.json
 `watch` берёт свежую выдачу и пропускает вакансии, которые уже сохранены для того же запроса и региона. `run` перечитывает карточки и обновляет их в базе. Дубли в выдаче определяются по ID. В терминале обновляется строка с текущей страницей, карточкой или паузой и временем на этом шаге. JSON выводится отдельно в stdout.
 
 Для входа в аккаунт запустите `login`, войдите в HH и нажмите Enter в терминале. При запуске из той же папки команды `run` и `watch` подхватят профиль. Для своего каталога передайте одинаковый `--profile` при входе и сборе.
+
+База и профиль из прежнего каталога `data` подхватываются автоматически, пока в `vacancy-analysis-data` нет одноимённой базы или профиля.
 
 Если HH покажет капчу, запустите сбор с `--headed`. Пройдите проверку в окне Chromium и нажмите Enter в терминале. Сбор проверит страницу один раз и продолжится, если она открылась.
 

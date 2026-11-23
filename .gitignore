@@ -4,6 +4,7 @@ __pycache__/
 .env
 .env.*
 /data/
+/vacancy-analysis-data/
 *.sqlite3*
 *.db
 *.db-*

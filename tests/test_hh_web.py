@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
-from vacancy_analysis.__main__ import main
+from vacancy_analysis.__main__ import data_path, main
 from vacancy_analysis.models import SearchQuery, Window
 from vacancy_analysis.sources.hh import HHWebClient, Markup, browser_tab, load_page, vacancy_data
 from vacancy_analysis.orchestrator import collect
@@ -143,9 +143,11 @@ class BrowserCollectionTest(unittest.TestCase):
         self.assertEqual(len(checked), 1)
 
     def test_run_reuses_profile_from_login(self):
-        profile = self.database.parent / "hh-profile"
+        data_dir = self.database.parent / "vacancy-analysis-data"
+        profile = data_dir / "hh-profile"
         calls = []
-        self.enterContext(patch("vacancy_analysis.__main__.DEFAULT_HH_PROFILE", profile))
+        self.enterContext(patch("vacancy_analysis.__main__.DATA_DIRECTORY", data_dir))
+        self.enterContext(patch("vacancy_analysis.__main__.LEGACY_DATA_DIRECTORY", self.database.parent / "data"))
         self.enterContext(patch("builtins.input", return_value=""))
 
         @contextmanager
@@ -174,7 +176,7 @@ class BrowserCollectionTest(unittest.TestCase):
                     yield page
             else:
                 if headed:
-                    selected.mkdir()
+                    selected.mkdir(parents=True)
                 yield None
 
         self.enterContext(patch("vacancy_analysis.__main__.browser_tab", fixture_tab))
@@ -189,6 +191,21 @@ class BrowserCollectionTest(unittest.TestCase):
         code, result = self.call_cli("run", "--text", "DevOps", "--limit", "1")
         self.assertEqual((code, result["saved"]), (0, 1))
         self.assertEqual(calls, [(profile, True), (profile, False)])
+
+    def test_data_directory_prefers_new_location_and_reuses_existing_files(self):
+        data_dir = self.database.parent / "vacancy-analysis-data"
+        old_dir = self.database.parent / "data"
+        with patch("vacancy_analysis.__main__.DATA_DIRECTORY", data_dir), patch(
+            "vacancy_analysis.__main__.LEGACY_DATA_DIRECTORY", old_dir,
+        ):
+            old_dir.mkdir()
+            (old_dir / "hh-profile").mkdir()
+            self.assertEqual(data_path("hh-profile"), old_dir / "hh-profile")
+            with redirect_stdout(StringIO()):
+                self.assertEqual(main(["runs"]), 0)
+            self.assertTrue((data_dir / "vacancies.sqlite3").is_file())
+            (old_dir / "vacancies.sqlite3").touch()
+            self.assertEqual(data_path("vacancies.sqlite3"), data_dir / "vacancies.sqlite3")
 
     def test_publication_date_from_visible_card(self):
         html = """<body><h1 data-qa="vacancy-title">SRE</h1>
