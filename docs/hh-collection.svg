@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="356" viewBox="0 0 900 356" role="img" aria-labelledby="title desc">
+  <title id="title">Сбор вакансий HH</title>
+  <desc id="desc">Оркестратор передаёт окно дат сборщику. Поиск делится на меньшие окна при переполнении. Сборщик загружает карточки по ID и сохраняет их вместе со статусом запуска.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" markerWidth="8" markerHeight="8" refX="8" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#607386"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, sans-serif; fill: #192d3e; }
+      .heading { font-size: 25px; font-weight: 650; }
+      .label { font-size: 16px; font-weight: 600; }
+      .detail { font-size: 13px; fill: #435869; }
+      .step { fill: #d9efe9; stroke: #3f8378; stroke-width: 1.5; }
+      .decision { fill: #ffedcf; stroke: #ae7b41; stroke-width: 1.5; }
+      .link { fill: none; stroke: #607386; stroke-width: 1.6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="900" height="356" rx="16" fill="#f8fafc"/>
+  <text x="36" y="44" class="heading">Сбор вакансий HH</text>
+
+  <path class="link" d="M212 124H245"/>
+  <path class="link" d="M440 124H468"/>
+  <path class="link" d="M664 124H698"/>
+  <path class="link" d="M343 157V238"/>
+  <path class="link" d="M244 273H224V173H299V157"/>
+  <path class="link" d="M799 157V238"/>
+  <path class="link" d="M441 272H698"/>
+
+  <rect x="36" y="92" width="176" height="64" rx="10" class="step"/>
+  <rect x="246" y="92" width="194" height="64" rx="10" class="step"/>
+  <rect x="470" y="92" width="194" height="64" rx="10" class="step"/>
+  <rect x="700" y="92" width="164" height="64" rx="10" class="step"/>
+  <rect x="246" y="239" width="194" height="66" rx="10" class="decision"/>
+  <rect x="700" y="239" width="164" height="66" rx="10" class="step"/>
+
+  <g text-anchor="middle">
+    <text x="124" y="119" class="label">Оркестратор</text>
+    <text x="124" y="138" class="detail">Окно дат и фильтры</text>
+    <text x="343" y="119" class="label">Поиск вакансий</text>
+    <text x="343" y="138" class="detail">GET /vacancies</text>
+    <text x="567" y="119" class="label">Полные карточки</text>
+    <text x="567" y="138" class="detail">GET /vacancies/{id}</text>
+    <text x="782" y="119" class="label">Запись в SQLite</text>
+    <text x="782" y="138" class="detail">Источник и ID</text>
+    <text x="343" y="267" class="label">Разбиение окна</text>
+    <text x="343" y="286" class="detail">Шаг не меньше 5 минут</text>
+    <text x="782" y="267" class="label">Итог запуска</text>
+    <text x="782" y="286" class="detail">Счётчики и ошибки</text>
+  </g>
+  <text x="352" y="200" class="detail">Больше 2 000 результатов</text>
+  <text x="232" y="225" class="detail">Ещё делится</text>
+  <text x="498" y="262" class="detail">Минимальное окно переполнено</text>
+</svg>

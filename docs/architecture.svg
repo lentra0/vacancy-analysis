@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="685" viewBox="0 0 900 685" role="img" aria-labelledby="title desc">
+  <title id="title">Архитектура анализа вакансий</title>
+  <desc id="desc">Оркестратор запускает сбор, нормализацию и аналитику. Сбор и ручная загрузка пишут в общий слой исходных вакансий. Нормализатор использует справочники, после проверки данные поступают в аналитику.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" markerWidth="8" markerHeight="8" refX="8" refY="5" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#607386"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, sans-serif; fill: #192d3e; }
+      .heading { font-size: 25px; font-weight: 650; }
+      .label { font-size: 17px; font-weight: 600; }
+      .detail { font-size: 14px; fill: #435869; }
+      .ready { fill: #d9efe9; stroke: #3f8378; stroke-width: 1.5; }
+      .planned { fill: #ebeff8; stroke: #7d8ea9; stroke-width: 1.5; }
+      .link { fill: none; stroke: #607386; stroke-width: 1.6; marker-end: url(#arrow); }
+      .control { stroke-dasharray: 5 5; }
+    </style>
+  </defs>
+  <rect width="900" height="685" rx="16" fill="#f8fafc"/>
+  <text x="36" y="46" class="heading">Анализ рынка вакансий</text>
+  <rect x="617" y="32" width="13" height="13" rx="3" class="ready"/>
+  <text x="637" y="43" class="detail">Готово</text>
+  <rect x="719" y="32" width="13" height="13" rx="3" class="planned"/>
+  <text x="739" y="43" class="detail">В проекте</text>
+
+  <path class="link control" d="M436 138V166"/>
+  <path class="link control" d="M290 108H40V352H288"/>
+  <path class="link control" d="M582 108H862V577H584"/>
+  <path class="link" d="M436 225V252"/>
+  <path class="link" d="M748 225V281H584"/>
+  <path class="link" d="M436 310V322"/>
+  <path class="link" d="M584 352H634" marker-start="url(#arrow)"/>
+  <path class="link" d="M436 380V397"/>
+  <path class="link" d="M436 454V472"/>
+  <path class="link" d="M436 529V548"/>
+  <path class="link" d="M436 604V624"/>
+
+  <rect x="290" y="80" width="292" height="58" rx="10" class="ready"/>
+  <rect x="290" y="168" width="292" height="57" rx="10" class="ready"/>
+  <rect x="636" y="168" width="224" height="57" rx="10" class="planned"/>
+  <rect x="290" y="254" width="292" height="56" rx="10" class="ready"/>
+  <rect x="290" y="324" width="292" height="56" rx="10" class="planned"/>
+  <rect x="636" y="324" width="224" height="56" rx="10" class="planned"/>
+  <rect x="290" y="398" width="292" height="56" rx="10" class="planned"/>
+  <rect x="290" y="473" width="292" height="56" rx="10" class="planned"/>
+  <rect x="290" y="549" width="292" height="55" rx="10" class="planned"/>
+  <rect x="290" y="625" width="292" height="39" rx="10" class="planned"/>
+
+  <g text-anchor="middle">
+    <text x="436" y="104" class="label">Оркестратор</text>
+    <text x="436" y="123" class="detail">Расписание и статусы запусков</text>
+    <text x="436" y="191" class="label">Сбор вакансий</text>
+    <text x="436" y="210" class="detail">Адаптер HH</text>
+    <text x="748" y="192" class="label">Ручная загрузка</text>
+    <text x="748" y="211" class="detail">Для тестов</text>
+    <text x="436" y="278" class="label">Исходные вакансии</text>
+    <text x="436" y="296" class="detail">Описания и метаданные</text>
+    <text x="436" y="357" class="label">Нормализация</text>
+    <text x="748" y="347" class="label">Справочники</text>
+    <text x="748" y="365" class="detail">Профессии и навыки</text>
+    <text x="436" y="422" class="label">Проверка правил</text>
+    <text x="436" y="440" class="detail">Дедупликация вакансий</text>
+    <text x="436" y="497" class="label">Проверенные вакансии</text>
+    <text x="436" y="515" class="detail">Связи с навыками</text>
+    <text x="436" y="582" class="label">Аналитика</text>
+    <text x="436" y="650" class="label">Результаты</text>
+  </g>
+</svg>
