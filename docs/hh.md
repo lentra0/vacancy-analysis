@@ -7,15 +7,15 @@
 Скачайте файл для своей системы из [Releases](https://github.com/lentra0/vacancy-analysis/releases) и подставьте его версию в команды ниже. Chromium входит в сборку. На Linux нужны его системные библиотеки.
 
 ```powershell
-$version = 'v0.1.8'
-$app = ".\vacancy-analysis-${version}-windows-x64.exe"
+$version = 'v0.1.10'
+$app = ".\vacancy-analysis-windows-x64-${version}.exe"
 & $app run --text DevOps --area 1 --limit 5
 & $app export > vacancies.json
 ```
 
 ```sh
-version=v0.1.8
-app="./vacancy-analysis-${version}-linux-x64"
+version=v0.1.10
+app="./vacancy-analysis-linux-x64-${version}"
 chmod +x "$app"
 "$app" run --text DevOps --area 1 --limit 5
 "$app" export > vacancies.json
