@@ -56,29 +56,14 @@ class Storage:
     def close(self) -> None:
         self.db.close()
 
-    def last_success(self, query: HHQuery) -> datetime | None:
-        value = self.db.execute("""
-            SELECT MAX(window_to) FROM runs
-            WHERE query_key = ? AND status = 'ok' AND tracks_cursor = 1
-        """, (query.key,)).fetchone()[0]
-        return datetime.fromisoformat(value) if value else None
-
-    def first_auto_start(self, query: HHQuery) -> datetime | None:
-        value = self.db.execute("""
-            SELECT MIN(window_from) FROM runs WHERE query_key = ? AND tracks_cursor = 1
-        """, (query.key,)).fetchone()[0]
-        return datetime.fromisoformat(value) if value else None
-
-    def start(
-        self, run_id: str, query: HHQuery, window: Window, *, tracks_cursor: bool
-    ) -> None:
+    def start(self, run_id: str, query: HHQuery, window: Window) -> None:
         with self.db:
             self.db.execute("""
                 INSERT INTO runs
                     (id, query_key, window_from, window_to, started_at, status, tracks_cursor)
-                VALUES (?, ?, ?, ?, ?, 'running', ?)
+                VALUES (?, ?, ?, ?, ?, 'running', 0)
             """, (run_id, query.key, window.start.isoformat(),
-                  window.end.isoformat(), now(), tracks_cursor))
+                  window.end.isoformat(), now()))
 
     def finish(self, run_id: str, status: str, outcome: Collection) -> None:
         with self.db:
