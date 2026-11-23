@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import re
 import time
-from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 from .hh import HHBlocked, HHError, HHQuery, Window
 
@@ -191,6 +191,24 @@ def site_url(base_url: str, href: str) -> str | None:
     return None
 
 
+def search_page_number(url: str) -> int:
+    number = parse_qs(urlsplit(url).query).get("page", ["0"])[0]
+    return int(number) if number.isascii() and number.isdecimal() else 0
+
+
+def next_search_href(markup: Markup, current_url: str) -> str | None:
+    for key in (*NEXT_KEYS, "next"):
+        for node in markup.nodes[key]:
+            if href := node.attrs.get("href"):
+                return href
+    next_number = search_page_number(current_url) + 1
+    for node in markup.nodes["pager-page"]:
+        href = node.attrs.get("href")
+        if href and search_page_number(href) == next_number:
+            return href
+    return None
+
+
 class HHWebClient:
     def __init__(
         self,
@@ -268,12 +286,10 @@ class HHWebClient:
 
             if page_number + 1 == self.pages:
                 return
-            next_link = next((node for key in (*NEXT_KEYS, "next") for node in markup.nodes[key]
-                              if node.attrs.get("href")), None)
-            if next_link is None:
+            href = next_search_href(markup, final_url)
+            if href is None:
                 return
-            href = next_link.attrs.get("href")
-            next_url = site_url(self.base_url, urljoin(final_url, href)) if href else None
+            next_url = site_url(self.base_url, urljoin(final_url, href))
             if not next_url or urlsplit(next_url).path != "/search/vacancy":
                 raise HHError("В выдаче HH сломана ссылка на следующую страницу")
             url = next_url

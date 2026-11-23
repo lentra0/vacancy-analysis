@@ -18,9 +18,7 @@ from vacancy_analysis.storage import Storage
 FIXTURES = Path(__file__).with_name("fixtures")
 SEARCH = (FIXTURES / "hh-search.html").read_text(encoding="utf-8")
 CARD = (FIXTURES / "hh-vacancy.html").read_text(encoding="utf-8")
-SECOND_SEARCH = SEARCH.replace("/vacancy/101", "/vacancy/102").split(
-    '<a data-qa="pager-next"', 1
-)[0] + "</main></body></html>"
+SECOND_SEARCH = SEARCH.replace("/vacancy/101", "/vacancy/102")
 
 
 class BrowserCollectionTest(unittest.TestCase):
