@@ -1,10 +1,18 @@
+from collections.abc import Iterator
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 import sqlite3
+from typing import Protocol
 from uuid import uuid4
 
-from .hh import Collection, HHClient, HHError, HHQuery, TICK, Window
+from .hh import Collection, HHBlocked, HHError, HHQuery, TICK, Window
 from .storage import Storage
+
+
+class Collector(Protocol):
+    def vacancy_ids(self, query: HHQuery, window: Window) -> Iterator[str]: ...
+
+    def vacancy(self, vacancy_id: str) -> dict: ...
 
 
 def floor_time(value: datetime) -> datetime:
@@ -24,12 +32,14 @@ def next_window(storage: Storage, query: HHQuery, current_time: datetime) -> Win
 
 
 def collect(
-    client: HHClient,
+    client: Collector,
     storage: Storage,
     query: HHQuery,
     window: Window,
     *,
     tracks_cursor: bool = True,
+    card_limit: int | None = None,
+    new_only: bool = False,
 ) -> dict:
     run_id = uuid4().hex
     storage.start(run_id, query, window, tracks_cursor=tracks_cursor)
@@ -41,23 +51,28 @@ def collect(
             if vacancy_id in seen:
                 continue
             seen.add(vacancy_id)
+            if new_only and storage.has_for_query(query, vacancy_id):
+                outcome.skipped += 1
+                continue
             outcome.found += 1
             try:
                 vacancy = client.vacancy(vacancy_id)
             except HHError as error:
                 if error.status == 404:
                     outcome.unavailable += 1
-                    continue
-                if error.status in {400, 401, 403, 429}:
+                elif isinstance(error, HHBlocked) or error.status in {400, 401, 403, 429}:
                     raise
-                outcome.errors[vacancy_id] = str(error)
-                continue
-            if vacancy.get("archived") is True:
-                storage.discard_archived(vacancy_id)
-                outcome.archived += 1
-                continue
-            storage.save(run_id, vacancy)
-            outcome.saved += 1
+                else:
+                    outcome.errors[vacancy_id] = str(error)
+            else:
+                if vacancy.get("archived") is True:
+                    storage.discard_archived(vacancy_id)
+                    outcome.archived += 1
+                else:
+                    storage.save(run_id, vacancy)
+                    outcome.saved += 1
+            if card_limit is not None and outcome.found == card_limit:
+                break
 
         if outcome.errors:
             status = "partial" if outcome.saved else "failed"
@@ -65,6 +80,7 @@ def collect(
             status = "ok"
     except (HHError, sqlite3.Error) as error:
         outcome.errors["run"] = str(error)
+        outcome.blocked = isinstance(error, HHBlocked)
         status = "partial" if outcome.saved else "failed"
     except KeyboardInterrupt:
         outcome.errors["run"] = "Запуск прерван"
