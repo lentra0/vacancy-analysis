@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import sqlite3
 
-from .hh import Collection, HHQuery, Window
+from .models import Collection, SearchQuery, Vacancy, Window
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS runs (
     finished_at TEXT,
     status TEXT NOT NULL,
     tracks_cursor INTEGER NOT NULL,
-    summary TEXT
+    summary TEXT,
+    source TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS runs_query ON runs(query_key, status, window_to);
 CREATE TABLE IF NOT EXISTS raw_vacancies (
@@ -52,18 +53,25 @@ class Storage:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys = ON")
         self.db.executescript(SCHEMA)
+        if "source" not in self._run_columns():
+            with self.db:
+                self.db.execute("BEGIN IMMEDIATE")
+                if "source" not in self._run_columns():
+                    self.db.execute("ALTER TABLE runs ADD COLUMN source TEXT NOT NULL DEFAULT 'hh'")
 
     def close(self) -> None:
         self.db.close()
 
-    def start(self, run_id: str, query: HHQuery, window: Window) -> None:
+    def _run_columns(self) -> set[str]:
+        return {row["name"] for row in self.db.execute("PRAGMA table_info(runs)")}
+
+    def start(self, run_id: str, source: str, query: SearchQuery, window: Window) -> None:
         with self.db:
             self.db.execute("""
                 INSERT INTO runs
-                    (id, query_key, window_from, window_to, started_at, status, tracks_cursor)
-                VALUES (?, ?, ?, ?, ?, 'running', 0)
-            """, (run_id, query.key, window.start.isoformat(),
-                  window.end.isoformat(), now()))
+                    (id, source, query_key, window_from, window_to, started_at, status, tracks_cursor)
+                VALUES (?, ?, ?, ?, ?, ?, 'running', 0)
+            """, (run_id, source, query.key, window.start.isoformat(), window.end.isoformat(), now()))
 
     def finish(self, run_id: str, status: str, outcome: Collection) -> None:
         with self.db:
@@ -71,40 +79,36 @@ class Storage:
                 UPDATE runs SET finished_at = ?, status = ?, summary = ? WHERE id = ?
             """, (now(), status, json.dumps(asdict(outcome), ensure_ascii=False), run_id))
 
-    def save(self, run_id: str, vacancy: dict) -> None:
-        metadata = {key: vacancy.get(key) for key in (
-            "area", "employer", "experience", "key_skills",
-            "professional_roles", "salary", "salary_range", "work_format",
-        )}
+    def save(self, run_id: str, source: str, vacancy: Vacancy) -> None:
         with self.db:
             self.db.execute("""
                 INSERT INTO raw_vacancies
-                VALUES ('hh', ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (source, external_id) DO UPDATE SET
                     url = excluded.url, title = excluded.title,
                     description_raw = excluded.description_raw,
                     published_at = excluded.published_at, fetched_at = excluded.fetched_at,
                     metadata = excluded.metadata
-            """, (vacancy["id"], vacancy["alternate_url"], vacancy["name"],
-                  vacancy["description"], vacancy["published_at"], now(),
-                  json.dumps(metadata, ensure_ascii=False)))
+            """, (source, vacancy.external_id, vacancy.url, vacancy.title,
+                  vacancy.description_raw, vacancy.published_at, now(),
+                  json.dumps(vacancy.metadata, ensure_ascii=False)))
             self.db.execute("""
-                INSERT OR IGNORE INTO run_vacancies VALUES (?, 'hh', ?)
-            """, (run_id, vacancy["id"]))
+                INSERT OR IGNORE INTO run_vacancies VALUES (?, ?, ?)
+            """, (run_id, source, vacancy.external_id))
 
-    def discard_archived(self, vacancy_id: str) -> None:
+    def discard_archived(self, source: str, vacancy_id: str) -> None:
         with self.db:
             self.db.execute("""
-                DELETE FROM raw_vacancies WHERE source = 'hh' AND external_id = ?
-            """, (vacancy_id,))
+                DELETE FROM raw_vacancies WHERE source = ? AND external_id = ?
+            """, (source, vacancy_id))
 
-    def has_for_query(self, query: HHQuery, vacancy_id: str) -> bool:
+    def has_for_query(self, source: str, query: SearchQuery, vacancy_id: str) -> bool:
         return self.db.execute("""
             SELECT 1 FROM runs
             JOIN run_vacancies ON run_vacancies.run_id = runs.id
-            WHERE query_key = ? AND source = 'hh' AND external_id = ?
+            WHERE runs.query_key = ? AND run_vacancies.source = ? AND external_id = ?
             LIMIT 1
-        """, (query.key, vacancy_id)).fetchone() is not None
+        """, (query.key, source, vacancy_id)).fetchone() is not None
 
     def vacancies(self, limit: int | None) -> list[dict]:
         rows = self.db.execute("""

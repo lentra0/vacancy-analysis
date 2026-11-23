@@ -13,7 +13,7 @@ def main() -> None:
         raise SystemExit("Сборка поддерживает Linux x64 и Windows x64.")
 
     env = dict(os.environ, PLAYWRIGHT_BROWSERS_PATH="0")
-    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
+    subprocess.run([sys.executable, "-m", "playwright", "install", "--no-shell", "chromium"],
                    check=True, cwd=ROOT, env=env)
     subprocess.run([
         sys.executable, "-m", "PyInstaller",

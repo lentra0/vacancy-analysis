@@ -4,13 +4,14 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 from io import TextIOWrapper
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
 import time
 
-from .hh import HHError, HHQuery, Window
-from .hh_web import LOGIN, HHWebClient, browser_tab, load_page
+from .models import CollectionError, SearchQuery, Window
+from .sources.hh import LOGIN, SITE, HHWebClient, browser_tab, load_page
 from .orchestrator import collect
 from .storage import Storage
 
@@ -27,12 +28,12 @@ def print_json(value: dict | list) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Сбор вакансий HH")
+    parser = argparse.ArgumentParser(description="Анализ рынка вакансий")
     parser.add_argument("--db", type=Path, default=Path("data/vacancies.sqlite3"),
                         help="путь к SQLite (по умолчанию data/vacancies.sqlite3)")
     commands = parser.add_subparsers(dest="command", required=True)
-    run = commands.add_parser("run", help="запустить сбор один раз")
-    watch = commands.add_parser("watch", help="повторять сбор по интервалу")
+    run = commands.add_parser("run", help="запустить сбор HH один раз")
+    watch = commands.add_parser("watch", help="повторять сбор HH по интервалу")
     for command in (run, watch):
         command.add_argument("--text", required=True, help="поисковый запрос")
         command.add_argument("--area", help="ID региона HH")
@@ -70,10 +71,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.command == "export":
                 print_json(storage.vacancies(args.limit))
                 return 0
-            query = HHQuery(args.text.strip(), args.area)
+            query = SearchQuery(args.text.strip(), args.area)
             page = stack.enter_context(browser_tab(args.profile, args.headed))
             client = HHWebClient(
                 partial(load_page, page), pages=args.pages, period=args.period, delay=args.delay,
+                base_url=os.getenv("VACANCY_ANALYSIS_HH_BASE_URL", SITE).rstrip("/"),
             )
             while True:
                 now = datetime.now(timezone.utc)
@@ -88,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
                 time.sleep(args.interval)
     except KeyboardInterrupt:
         return 130
-    except (EOFError, HHError, OSError, sqlite3.Error) as error:
+    except (EOFError, CollectionError, OSError, sqlite3.Error) as error:
         print(error, file=sys.stderr)
         return 1
 

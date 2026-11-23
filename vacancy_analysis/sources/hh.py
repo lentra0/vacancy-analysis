@@ -5,12 +5,16 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from html.parser import HTMLParser
 import json
+import os
 from pathlib import Path
 import re
+import sys
 import time
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
-from .hh import HHBlocked, HHError, HHQuery
+from ..models import (
+    AccessBlocked, CollectionError, SearchQuery, Vacancy, VacancyArchived, VacancyUnavailable,
+)
 
 SITE = "https://hh.ru"
 LOGIN = f"{SITE}/account/login"
@@ -139,12 +143,12 @@ def name_field(name: str) -> dict | None:
     return {"name": name} if name else None
 
 
-def vacancy_data(markup: Markup, vacancy_id: str, url: str) -> dict:
+def vacancy_data(markup: Markup, vacancy_id: str, url: str) -> Vacancy:
     archived = markup.first("vacancy-archive-message", "vacancy-archive-title") or any(
         node.text.lower() == "вакансия в архиве" for node in markup.nodes["h2"]
     )
     if archived:
-        return {"id": vacancy_id, "archived": True}
+        raise VacancyArchived(f"{vacancy_id}: вакансия в архиве")
     job = job_posting(markup)
     title = markup.text("vacancy-title") or job.get("title")
     description_node = markup.first("vacancy-description")
@@ -152,7 +156,7 @@ def vacancy_data(markup: Markup, vacancy_id: str, url: str) -> dict:
     description = description or job.get("description")
     published_at = publication_date(markup, job)
     if not all(isinstance(value, str) and value.strip() for value in (title, description, published_at)):
-        raise HHError(f"{vacancy_id}: неполная карточка")
+        raise CollectionError(f"{vacancy_id}: неполная карточка")
 
     employer = job.get("hiringOrganization")
     employer = employer.get("name", "") if isinstance(employer, dict) else ""
@@ -164,18 +168,17 @@ def vacancy_data(markup: Markup, vacancy_id: str, url: str) -> dict:
     skills = [node.text for key in ("skills-element", "vacancy-key-skill")
               for node in markup.nodes[key] if node.text]
     salary = markup.text("vacancy-salary")
-    return {
-        "id": vacancy_id,
-        "name": title.strip(),
-        "alternate_url": url,
-        "description": description,
-        "published_at": published_at,
+    metadata = {
         "area": name_field(area or markup.text("vacancy-view-location", "vacancy-view-raw-address")),
         "employer": name_field(markup.text("vacancy-company-name") or employer),
         "experience": name_field(markup.text("vacancy-experience")),
         "key_skills": [{"name": skill} for skill in dict.fromkeys(skills)],
+        "professional_roles": None,
         "salary": {"text": salary} if salary else None,
+        "salary_range": None,
+        "work_format": None,
     }
+    return Vacancy(vacancy_id, url, title.strip(), description, published_at, metadata)
 
 
 def site_url(base_url: str, href: str) -> str | None:
@@ -210,6 +213,8 @@ def next_search_href(markup: Markup, current_url: str) -> str | None:
 
 
 class HHWebClient:
+    source = "hh"
+
     def __init__(
         self,
         load: Callable[[str], tuple[int, str, str]],
@@ -238,19 +243,21 @@ class HHWebClient:
         path = urlsplit(final_url).path
         # Проверяем ограничения до разбора выдачи, иначе капча может выглядеть пустым поиском.
         if status in {401, 403, 429} or path.startswith(("/captcha", "/account/login")):
-            raise HHBlocked(f"HH ограничил доступ (HTTP {status}): {path}", status)
+            raise AccessBlocked(f"HH ограничил доступ (HTTP {status}): {path}")
+        if status == 404:
+            raise VacancyUnavailable(f"{path}: HTTP 404")
         if status >= 400:
-            raise HHError(f"{path}: HTTP {status}", status)
+            raise CollectionError(f"{path}: HTTP {status}")
         if not site_url(self.base_url, final_url):
-            raise HHError(f"Неожиданное перенаправление: {final_url}")
+            raise CollectionError(f"Неожиданное перенаправление: {final_url}")
         markup = Markup(html)
         if markup.first("captcha", "captcha-image", "captcha-input") or (
             "вы не робот" in markup.text("body").lower()
         ):
-            raise HHBlocked("HH запросил капчу")
+            raise AccessBlocked("HH запросил капчу")
         return markup, final_url
 
-    def vacancy_ids(self, query: HHQuery) -> Iterator[str]:
+    def vacancy_ids(self, query: SearchQuery) -> Iterator[str]:
         params = {"text": query.text, "order_by": "publication_time", "search_period": self.period}
         if query.area:
             params["area"] = query.area
@@ -258,11 +265,11 @@ class HHWebClient:
         visited = set()
         for page_number in range(self.pages):
             if url in visited:
-                raise HHError("HH повторил страницу выдачи")
+                raise CollectionError("HH повторил страницу выдачи")
             visited.add(url)
             markup, final_url = self._get(url)
             if urlsplit(final_url).path.rstrip("/") != "/search/vacancy":
-                raise HHError(f"HH перенаправил с поиска на {final_url}")
+                raise CollectionError(f"HH перенаправил с поиска на {final_url}")
             links = [node for key in TITLE_KEYS for node in markup.nodes[key]] or markup.nodes["a"]
             ids = []
             for link in links:
@@ -281,7 +288,7 @@ class HHWebClient:
                 )
                 if confirmed_empty:
                     return
-                raise HHError("В выдаче HH не найдены ссылки на вакансии")
+                raise CollectionError("В выдаче HH не найдены ссылки на вакансии")
             yield from ids
 
             if page_number + 1 == self.pages:
@@ -291,14 +298,14 @@ class HHWebClient:
                 return
             next_url = site_url(self.base_url, urljoin(final_url, href))
             if not next_url or urlsplit(next_url).path != "/search/vacancy":
-                raise HHError("В выдаче HH сломана ссылка на следующую страницу")
+                raise CollectionError("В выдаче HH сломана ссылка на следующую страницу")
             url = next_url
 
-    def vacancy(self, vacancy_id: str) -> dict:
+    def vacancy(self, vacancy_id: str) -> Vacancy:
         path = f"/vacancy/{vacancy_id}"
         markup, final_url = self._get(self.base_url + path)
         if urlsplit(final_url).path.rstrip("/") != path:
-            raise HHError(f"{vacancy_id}: HH перенаправил на другую карточку")
+            raise CollectionError(f"{vacancy_id}: HH перенаправил на другую карточку")
         return vacancy_data(markup, vacancy_id, self.base_url + path)
 
 
@@ -307,23 +314,31 @@ def browser_tab(profile: Path | None, headed: bool):
     try:
         from playwright.sync_api import Error, sync_playwright
     except ImportError as error:
-        raise HHError("Установите Playwright и Chromium по инструкции в README") from error
+        raise CollectionError("Установите Playwright и Chromium по инструкции в README") from error
 
     try:
+        env = dict(os.environ)
+        if sys.platform == "linux" and getattr(sys, "frozen", False):
+            # Chromium использует системные библиотеки, а PyInstaller меняет их путь.
+            original_path = env.get("LD_LIBRARY_PATH_ORIG")
+            if original_path is None:
+                env.pop("LD_LIBRARY_PATH", None)
+            else:
+                env["LD_LIBRARY_PATH"] = original_path
         with sync_playwright() as playwright:
             if profile is None:
-                browser = playwright.chromium.launch(headless=not headed)
+                browser = playwright.chromium.launch(channel="chromium", headless=not headed, env=env)
                 context = browser.new_context(locale="ru-RU")
             else:
                 context = playwright.chromium.launch_persistent_context(
-                    str(profile), headless=not headed, locale="ru-RU",
+                    str(profile), channel="chromium", headless=not headed, locale="ru-RU", env=env,
                 )
             try:
                 yield context.pages[0] if context.pages else context.new_page()
             finally:
                 context.close()
     except Error as error:
-        raise HHError(f"Chromium: {error.message}") from error
+        raise CollectionError(f"Chromium: {error.message}") from error
 
 
 def load_page(page, url: str) -> tuple[int, str, str]:
@@ -332,7 +347,7 @@ def load_page(page, url: str) -> tuple[int, str, str]:
     try:
         response = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
         if response is None:
-            raise HHError(f"Браузер не получил ответ: {url}")
+            raise CollectionError(f"Браузер не получил ответ: {url}")
         return response.status, page.url, page.content()
     except Error as error:
-        raise HHError(f"Не удалось открыть {url}: {error.message}") from error
+        raise CollectionError(f"Не удалось открыть {url}: {error.message}") from error

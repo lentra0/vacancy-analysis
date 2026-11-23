@@ -3,13 +3,19 @@ from datetime import datetime
 import json
 
 
-class HHError(RuntimeError):
-    def __init__(self, message: str, status: int | None = None):
-        super().__init__(message)
-        self.status = status
+class CollectionError(RuntimeError):
+    pass
 
 
-class HHBlocked(HHError):
+class AccessBlocked(CollectionError):
+    pass
+
+
+class VacancyUnavailable(CollectionError):
+    pass
+
+
+class VacancyArchived(CollectionError):
     pass
 
 
@@ -20,13 +26,23 @@ class Window:
 
 
 @dataclass(frozen=True)
-class HHQuery:
+class SearchQuery:
     text: str
-    area: str | None
+    area: str | None = None
 
     @property
     def key(self) -> str:
         return json.dumps([self.text, self.area], ensure_ascii=False)
+
+
+@dataclass(frozen=True)
+class Vacancy:
+    external_id: str
+    url: str
+    title: str
+    description_raw: str
+    published_at: str
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass

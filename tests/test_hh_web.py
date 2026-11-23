@@ -10,8 +10,8 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 from vacancy_analysis.__main__ import main
-from vacancy_analysis.hh import HHQuery, Window
-from vacancy_analysis.hh_web import HHWebClient, Markup, browser_tab, load_page, vacancy_data
+from vacancy_analysis.models import SearchQuery, Window
+from vacancy_analysis.sources.hh import HHWebClient, Markup, browser_tab, load_page, vacancy_data
 from vacancy_analysis.orchestrator import collect
 from vacancy_analysis.storage import Storage
 
@@ -68,7 +68,7 @@ class BrowserCollectionTest(unittest.TestCase):
                 "vacancy_analysis.__main__.load_page",
                 side_effect=lambda _, url: (200, url, self.serve(url)),
             ))
-        self.enterContext(patch("vacancy_analysis.hh_web.time.sleep"))
+        self.enterContext(patch("vacancy_analysis.sources.hh.time.sleep"))
 
         code, run = self.call_cli("run", "--text", "DevOps", "--area", "1", "--limit", "2")
         self.assertEqual((code, run["status"], run["saved"]), (0, "ok", 2))
@@ -90,7 +90,7 @@ class BrowserCollectionTest(unittest.TestCase):
 
     def test_watch_skips_saved_cards_and_keeps_limit(self):
         client = HHWebClient(lambda url: (200, url, self.serve(url)), delay=0)
-        query = HHQuery("DevOps", "1")
+        query = SearchQuery("DevOps", "1")
         now = datetime.now(timezone.utc)
         with closing(Storage(self.database)) as storage:
             results = [
@@ -112,7 +112,7 @@ class BrowserCollectionTest(unittest.TestCase):
         now = datetime.now(timezone.utc)
         client = HHWebClient(load, delay=0)
         with closing(Storage(self.database)) as storage:
-            result = collect(client, storage, HHQuery("DevOps", "1"), Window(now, now))
+            result = collect(client, storage, SearchQuery("DevOps", "1"), Window(now, now))
             self.assertEqual((result["status"], result["saved"], result["blocked"]),
                              ("partial", 1, True))
             self.assertEqual(result["errors"]["run"], "HH запросил капчу")
@@ -122,8 +122,8 @@ class BrowserCollectionTest(unittest.TestCase):
         <div data-qa="vacancy-description"><div>Мониторинг</div></div>
         <p>Вакансия опубликована 23 ноября 2026 в Москве</p></body>"""
         card = vacancy_data(Markup(html), "101", "https://hh.ru/vacancy/101")
-        self.assertEqual(card["published_at"], "2026-11-23")
-        self.assertEqual(card["description"], "<div>Мониторинг</div>")
+        self.assertEqual(card.published_at, "2026-11-23")
+        self.assertEqual(card.description_raw, "<div>Мониторинг</div>")
 
 
 if __name__ == "__main__":
