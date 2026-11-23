@@ -7,14 +7,14 @@
 Скачайте файл для своей системы из [Releases](https://github.com/lentra0/vacancy-analysis/releases) и подставьте его версию в команды ниже. Chromium входит в сборку. На Linux нужны его системные библиотеки.
 
 ```powershell
-$version = 'v0.1.6'
+$version = 'v0.1.7'
 $app = ".\vacancy-analysis-${version}-windows-x64.exe"
 & $app run --text DevOps --area 1 --limit 5
 & $app export > vacancies.json
 ```
 
 ```sh
-version=v0.1.6
+version=v0.1.7
 app="./vacancy-analysis-${version}-linux-x64"
 chmod +x "$app"
 "$app" run --text DevOps --area 1 --limit 5
@@ -45,7 +45,8 @@ python -m vacancy_analysis export > vacancies.json
 | `run`, `watch` | `--pages N` | Сколько страниц выдачи просмотреть. По умолчанию 3 |
 | `run`, `watch` | `--period ДНИ` | Период выдачи HH. Допустимы 1, 3, 7 и 30. По умолчанию 1 |
 | `run`, `watch` | `--delay СЕКУНДЫ` | Пауза между открытиями страниц. По умолчанию 5 |
-| `run`, `watch` | `--profile КАТАЛОГ`, `--headed` | Сохранить профиль Chromium или показать окно браузера |
+| `run`, `watch` | `--profile КАТАЛОГ` | Профиль Chromium. По умолчанию подхватывается `data/hh-profile` |
+| `run`, `watch` | `--headed` | Показать Chromium и дать пройти проверку HH вручную |
 | `watch` | `--interval СЕКУНДЫ` | Пауза после каждого запуска. Первый сбор начинается сразу |
 | `login` | `--profile КАТАЛОГ` | Профиль для ручного входа в HH. По умолчанию `data/hh-profile` |
 | `runs` | `--limit N` | Сколько последних запусков показать. По умолчанию 10 |
@@ -53,14 +54,16 @@ python -m vacancy_analysis export > vacancies.json
 
 ## Регулярный сбор
 
-`watch` берёт свежую выдачу и пропускает вакансии, которые уже сохранены для того же запроса и региона. `run` перечитывает карточки и обновляет их в базе. Дубли в выдаче определяются по ID. Если HH ограничит доступ или покажет капчу, сбор остановится и выведет причину.
+`watch` берёт свежую выдачу и пропускает вакансии, которые уже сохранены для того же запроса и региона. `run` перечитывает карточки и обновляет их в базе. Дубли в выдаче определяются по ID. В терминале обновляется строка с текущей страницей, карточкой или паузой и временем на этом шаге. JSON выводится отдельно в stdout.
 
-Если нужен вход в аккаунт, откройте браузер командой `login`, войдите в HH и нажмите Enter в терминале. Используйте тот же каталог профиля при сборе.
+Для входа в аккаунт запустите `login`, войдите в HH и нажмите Enter в терминале. При запуске из той же папки команды `run` и `watch` подхватят профиль. Для своего каталога передайте одинаковый `--profile` при входе и сборе.
+
+Если HH покажет капчу, запустите сбор с `--headed`. Пройдите проверку в окне Chromium и нажмите Enter в терминале. Сбор проверит страницу один раз и продолжится, если она открылась.
 
 ```sh
 python -m vacancy_analysis login
-python -m vacancy_analysis watch --text DevOps --area 1 \
-  --profile data/hh-profile --interval 7200
+python -m vacancy_analysis run --text DevOps --area 1 --headed
+python -m vacancy_analysis watch --text DevOps --area 1 --interval 7200
 python -m vacancy_analysis runs --limit 3
 ```
 

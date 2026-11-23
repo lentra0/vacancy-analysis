@@ -212,6 +212,10 @@ def next_search_href(markup: Markup, current_url: str) -> str | None:
     return None
 
 
+class HHCheckRequired(AccessBlocked):
+    pass
+
+
 class HHWebClient:
     source = "hh"
 
@@ -223,41 +227,62 @@ class HHWebClient:
         period: int = 1,
         delay: float = 5,
         base_url: str = SITE,
+        progress: Callable[[str], None] | None = None,
+        confirm_check: Callable[[str], bool] | None = None,
     ):
         self.load = load
         self.pages = pages
         self.period = period
         self.delay = delay
         self.base_url = base_url
+        self.progress = progress
+        self.confirm_check = confirm_check
         self.last_loaded = None
+        self.cards_opened = 0
 
-    def _get(self, url: str) -> tuple[Markup, str]:
+    def _read(self, url: str, stage: str) -> tuple[Markup, str]:
         if self.last_loaded is not None:
             wait = self.delay - (time.monotonic() - self.last_loaded)
             if wait > 0:
+                if self.progress:
+                    self.progress("Пауза перед запросом HH")
                 time.sleep(wait)
+        if self.progress:
+            self.progress(stage)
         try:
             status, final_url, html = self.load(url)
         finally:
             self.last_loaded = time.monotonic()
         path = urlsplit(final_url).path
-        # Проверяем ограничения до разбора выдачи, иначе капча может выглядеть пустым поиском.
-        if status in {401, 403, 429} or path.startswith(("/captcha", "/account/login")):
+        if not site_url(self.base_url, final_url):
+            raise CollectionError(f"Неожиданное перенаправление: {final_url}")
+        if status == 429:
+            raise AccessBlocked(f"HH ограничил доступ (HTTP {status}): {path}")
+        if path.startswith("/account/login"):
+            raise HHCheckRequired("HH попросил войти в аккаунт")
+        markup = Markup(html)
+        if path.startswith("/captcha") or markup.first("captcha", "captcha-image", "captcha-input") or (
+            "вы не робот" in markup.text("body").lower()
+        ):
+            raise HHCheckRequired("HH запросил капчу")
+        if status in {401, 403}:
             raise AccessBlocked(f"HH ограничил доступ (HTTP {status}): {path}")
         if status == 404:
             raise VacancyUnavailable(f"{path}: HTTP 404")
         if status >= 400:
             raise CollectionError(f"{path}: HTTP {status}")
-        if not site_url(self.base_url, final_url):
-            raise CollectionError(f"Неожиданное перенаправление: {final_url}")
-        markup = Markup(html)
-        if markup.first("captcha", "captcha-image", "captcha-input") or (
-            "вы не робот" in markup.text("body").lower()
-        ):
-            raise AccessBlocked("HH запросил капчу")
         return markup, final_url
 
+    def _get(self, url: str, stage: str) -> tuple[Markup, str]:
+        try:
+            return self._read(url, stage)
+        except HHCheckRequired as error:
+            if self.confirm_check and self.confirm_check(str(error)):
+                return self._read(url, stage)
+            raise
+
     def vacancy_ids(self, query: SearchQuery) -> Iterator[str]:
+        self.cards_opened = 0
         params = {"text": query.text, "order_by": "publication_time", "search_period": self.period}
         if query.area:
             params["area"] = query.area
@@ -267,7 +292,7 @@ class HHWebClient:
             if url in visited:
                 raise CollectionError("HH повторил страницу выдачи")
             visited.add(url)
-            markup, final_url = self._get(url)
+            markup, final_url = self._get(url, f"Выдача HH, страница {page_number + 1}/{self.pages}")
             if urlsplit(final_url).path.rstrip("/") != "/search/vacancy":
                 raise CollectionError(f"HH перенаправил с поиска на {final_url}")
             links = [node for key in TITLE_KEYS for node in markup.nodes[key]] or markup.nodes["a"]
@@ -303,7 +328,9 @@ class HHWebClient:
 
     def vacancy(self, vacancy_id: str) -> Vacancy:
         path = f"/vacancy/{vacancy_id}"
-        markup, final_url = self._get(self.base_url + path)
+        self.cards_opened += 1
+        stage = f"Карточка HH {self.cards_opened}, ID {vacancy_id}"
+        markup, final_url = self._get(self.base_url + path, stage)
         if urlsplit(final_url).path.rstrip("/") != path:
             raise CollectionError(f"{vacancy_id}: HH перенаправил на другую карточку")
         return vacancy_data(markup, vacancy_id, self.base_url + path)
@@ -314,7 +341,7 @@ def browser_tab(profile: Path | None, headed: bool):
     try:
         from playwright.sync_api import Error, sync_playwright
     except ImportError as error:
-        raise CollectionError("Установите Playwright и Chromium по инструкции в README") from error
+        raise CollectionError("Установите Playwright и Chromium по инструкции в docs/hh.md") from error
 
     try:
         env = dict(os.environ)
@@ -333,10 +360,22 @@ def browser_tab(profile: Path | None, headed: bool):
                 context = playwright.chromium.launch_persistent_context(
                     str(profile), channel="chromium", headless=not headed, locale="ru-RU", env=env,
                 )
+            closed = False
+
+            def mark_closed(_):
+                nonlocal closed
+                closed = True
+
+            context.on("close", mark_closed)
             try:
                 yield context.pages[0] if context.pages else context.new_page()
             finally:
-                context.close()
+                if not closed:
+                    try:
+                        context.close()
+                    except Error:
+                        if not closed:
+                            raise
     except Error as error:
         raise CollectionError(f"Chromium: {error.message}") from error
 

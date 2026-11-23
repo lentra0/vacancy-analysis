@@ -1,10 +1,11 @@
-from contextlib import closing, contextmanager, redirect_stdout
+from contextlib import closing, contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 from io import StringIO
 import json
 import os
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
@@ -13,6 +14,7 @@ from vacancy_analysis.__main__ import main
 from vacancy_analysis.models import SearchQuery, Window
 from vacancy_analysis.sources.hh import HHWebClient, Markup, browser_tab, load_page, vacancy_data
 from vacancy_analysis.orchestrator import collect
+from vacancy_analysis.progress import TerminalProgress
 from vacancy_analysis.storage import Storage
 
 FIXTURES = Path(__file__).with_name("fixtures")
@@ -117,6 +119,77 @@ class BrowserCollectionTest(unittest.TestCase):
                              ("partial", 1, True))
             self.assertEqual(result["errors"]["run"], "HH запросил капчу")
 
+    def test_headed_check_can_continue_once_after_confirmation(self):
+        checked = []
+
+        def load(url):
+            if checked:
+                return 200, url, self.serve(url)
+            return 403, "https://hh.ru/captcha", '<body><input data-qa="captcha-input"></body>'
+
+        def confirm(reason):
+            checked.append(reason)
+            return True
+
+        client = HHWebClient(load, pages=1, delay=0, confirm_check=confirm)
+        self.assertEqual(list(client.vacancy_ids(SearchQuery("DevOps"))), ["101", "101"])
+        self.assertEqual(checked, ["HH запросил капчу"])
+
+        client = HHWebClient(lambda url: (429, url, ""), delay=0, confirm_check=confirm)
+        now = datetime.now(timezone.utc)
+        with closing(Storage(self.database)) as storage:
+            result = collect(client, storage, SearchQuery("DevOps"), Window(now, now))
+        self.assertTrue(result["blocked"])
+        self.assertEqual(len(checked), 1)
+
+    def test_run_reuses_profile_from_login(self):
+        profile = self.database.parent / "hh-profile"
+        calls = []
+        self.enterContext(patch("vacancy_analysis.__main__.DEFAULT_HH_PROFILE", profile))
+        self.enterContext(patch("builtins.input", return_value=""))
+
+        @contextmanager
+        def fixture_tab(selected, headed):
+            calls.append((selected, headed))
+            if os.getenv("HH_TEST_CHROMIUM") == "1":
+                with browser_tab(selected, headed=False) as page:
+                    if headed:
+                        page.context.add_cookies([{
+                            "name": "fixture_login", "value": "yes", "domain": "hh.ru",
+                            "path": "/", "expires": int(time.time()) + 120,
+                        }])
+                    else:
+                        cookies = page.context.cookies("https://hh.ru")
+                        self.assertTrue(any(cookie["name"] == "fixture_login" for cookie in cookies))
+
+                    def respond(route):
+                        if not route.request.is_navigation_request():
+                            route.abort()
+                            return
+                        url = route.request.url
+                        html = "<body>Вход</body>" if "/account/login" in url else self.serve(url)
+                        route.fulfill(content_type="text/html; charset=utf-8", body=html)
+
+                    page.route("https://hh.ru/**", respond)
+                    yield page
+            else:
+                if headed:
+                    selected.mkdir()
+                yield None
+
+        self.enterContext(patch("vacancy_analysis.__main__.browser_tab", fixture_tab))
+        if os.getenv("HH_TEST_CHROMIUM") != "1":
+            self.enterContext(patch(
+                "vacancy_analysis.__main__.load_page",
+                side_effect=lambda _, url: (200, url, "" if "/account/login" in url else self.serve(url)),
+            ))
+        self.enterContext(patch("vacancy_analysis.sources.hh.time.sleep"))
+        with redirect_stderr(StringIO()):
+            self.assertEqual(main(["login"]), 0)
+        code, result = self.call_cli("run", "--text", "DevOps", "--limit", "1")
+        self.assertEqual((code, result["saved"]), (0, 1))
+        self.assertEqual(calls, [(profile, True), (profile, False)])
+
     def test_publication_date_from_visible_card(self):
         html = """<body><h1 data-qa="vacancy-title">SRE</h1>
         <div data-qa="vacancy-description"><div>Мониторинг</div></div>
@@ -124,6 +197,25 @@ class BrowserCollectionTest(unittest.TestCase):
         card = vacancy_data(Markup(html), "101", "https://hh.ru/vacancy/101")
         self.assertEqual(card.published_at, "2026-11-23")
         self.assertEqual(card.description_raw, "<div>Мониторинг</div>")
+
+
+class ProgressTest(unittest.TestCase):
+    def test_updates_elapsed_time_and_clears_line(self):
+        class Terminal(StringIO):
+            def isatty(self):
+                return True
+
+        terminal = Terminal()
+        progress = TerminalProgress(terminal)
+        with patch("vacancy_analysis.progress.time.monotonic", side_effect=[10, 10, 12]), patch.object(
+            progress.stopped, "wait", side_effect=[False, True],
+        ):
+            progress.show("Выдача HH")
+            progress._refresh()
+        progress.clear()
+        self.assertIn("\rВыдача HH [00:00]", terminal.getvalue())
+        self.assertIn("\rВыдача HH [00:02]", terminal.getvalue())
+        self.assertTrue(terminal.getvalue().endswith("\r"))
 
 
 if __name__ == "__main__":
