@@ -2,6 +2,8 @@
 
 Собираем вакансии с HeadHunter в SQLite. В базе остаются исходные описания, явно указанные навыки и история запусков. Вакансии можно выгрузить в JSON для дальнейшей обработки.
 
+![Архитектура и роадмап](docs/architecture.svg)
+
 ## Запуск
 
 Скачайте файл для своей системы из [Releases](https://github.com/lentra0/vacancy-analysis/releases). В Windows запускайте из PowerShell, в Linux дайте файлу право на запуск. Chromium входит в сборку. На Linux нужны его системные библиотеки.
@@ -37,13 +39,11 @@ python -m vacancy_analysis export > vacancies.json
 | Перед командой | `--db ПУТЬ` | Файл SQLite. По умолчанию `data/vacancies.sqlite3` |
 | `run`, `watch` | `--text ЗАПРОС` | Поисковый запрос. Обязательный |
 | `run`, `watch` | `--area ID` | Регион HH. Например, `1` для Москвы |
-| `run`, `watch` | `--source web\|api` | Сайт через Chromium или официальный API. По умолчанию `web` |
-| `run`, `watch` в режиме `web` | `--limit N` | Сколько карточек можно открыть за запуск. По умолчанию 25 |
-| `run`, `watch` в режиме `web` | `--pages N` | Сколько страниц выдачи просмотреть. По умолчанию 3 |
-| `run`, `watch` в режиме `web` | `--period ДНИ` | Период выдачи HH. Допустимы 1, 3, 7 и 30. По умолчанию 1 |
-| `run`, `watch` в режиме `web` | `--delay СЕКУНДЫ` | Пауза между открытиями страниц. По умолчанию 5 |
-| `run`, `watch` в режиме `web` | `--profile КАТАЛОГ`, `--headed` | Сохранить профиль Chromium или показать окно браузера |
-| `run` в режиме `api` | `--from ДАТА`, `--to ДАТА` | Начало и конец окна в ISO 8601 с часовым поясом. Задаются вместе и включают режим `api` по умолчанию |
+| `run`, `watch` | `--limit N` | Сколько карточек можно открыть за запуск. По умолчанию 25 |
+| `run`, `watch` | `--pages N` | Сколько страниц выдачи просмотреть. По умолчанию 3 |
+| `run`, `watch` | `--period ДНИ` | Период выдачи HH. Допустимы 1, 3, 7 и 30. По умолчанию 1 |
+| `run`, `watch` | `--delay СЕКУНДЫ` | Пауза между открытиями страниц. По умолчанию 5 |
+| `run`, `watch` | `--profile КАТАЛОГ`, `--headed` | Сохранить профиль Chromium или показать окно браузера |
 | `watch` | `--interval СЕКУНДЫ` | Пауза после каждого запуска. Первый сбор начинается сразу |
 | `login` | `--profile КАТАЛОГ` | Профиль для ручного входа в HH. По умолчанию `data/hh-profile` |
 | `runs` | `--limit N` | Сколько последних запусков показать. По умолчанию 10 |
@@ -60,13 +60,6 @@ python -m vacancy_analysis login
 python -m vacancy_analysis watch --text DevOps --area 1 \
   --profile data/hh-profile --interval 7200
 python -m vacancy_analysis runs --limit 3
-```
-
-Для API передайте токен через `HH_TOKEN`, а идентификатор приложения и контакт через `HH_USER_AGENT`. Сбор по точному окну доступен в этом режиме. [Документация API HH](https://api.hh.ru/openapi/redoc)
-
-```sh
-python -m vacancy_analysis run --source api --text DevOps --area 1 \
-  --from 2026-11-23T12:00:00+03:00 --to 2026-11-23T13:00:00+03:00
 ```
 
 `run` возвращает код `0` при успехе, `2` при частичном результате и `1` при ошибке. `export` печатает массив карточек с полями `external_id`, `title`, `description_raw`, `published_at` и `metadata`, а также ссылкой, источником и временем сбора.
