@@ -1,83 +1,100 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="450" viewBox="0 0 960 450" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="670" viewBox="0 0 960 670" role="img" aria-labelledby="title desc">
   <title id="title">Архитектура и роадмап</title>
-  <desc id="desc">Chromium открывает страницы HH, сборщик читает карточки и сохраняет их в SQLite. Команда export выгружает данные в JSON. Дальше запланированы ручной импорт, нормализация и аналитика.</desc>
+  <desc id="desc">Оркестратор запускает независимые парсеры. Парсеры и ручной импорт пишут исходные вакансии в общую базу. Нормализация использует справочники, после проверки вакансии поступают в аналитику.</desc>
   <defs>
-    <linearGradient id="background" x2="1" y2="1">
-      <stop stop-color="#17243b"/>
-      <stop offset="1" stop-color="#10182a"/>
-    </linearGradient>
-    <marker id="chevron" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="m2 1 4 3-4 3" fill="none" stroke="#6fa5a7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto-start-reverse">
+      <path d="m2 1 5 3.5L2 8" fill="none" stroke="#4b4b4b" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
     </marker>
     <style>
       text { font-family: Inter, "DejaVu Sans", sans-serif; }
-      .heading { fill: #f3f7ff; font-size: 30px; font-weight: 700; }
-      .current { fill: #8ee8ce; font-weight: 650; font-size: 15px; }
-      .planned { fill: #bac9ea; font-weight: 650; font-size: 15px; }
-      .title { fill: #f3f7ff; font-size: 18px; font-weight: 650; }
-      .detail { fill: #b3c4db; font-size: 13px; }
-      .ready { fill: #182f3b; stroke: #457666; }
-      .future { fill: #1c2942; stroke: #455c85; }
-      .rule { stroke: #334564; }
-      .link { stroke: #6fa5a7; stroke-width: 1.5; marker-end: url(#chevron); }
+      .heading { fill: #161616; font-size: 30px; font-weight: 700; }
+      .title { fill: #171717; font-size: 18px; font-weight: 650; }
+      .detail { fill: #4a4a4a; font-size: 13px; }
+      .ready { fill: #ededed; stroke: #343434; stroke-width: 1.3; }
+      .future { fill: #fff; stroke: #696969; stroke-width: 1.3; stroke-dasharray: 5 4; }
+      .link { fill: none; stroke: #555; stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
     </style>
   </defs>
 
-  <rect width="960" height="450" rx="24" fill="url(#background)"/>
+  <rect x="1" y="1" width="958" height="668" rx="20" fill="#fafafa" stroke="#d7d7d7"/>
   <text x="40" y="61" class="heading">Архитектура и роадмап</text>
+  <rect x="666" y="43" width="17" height="17" rx="3" class="ready"/>
+  <text x="692" y="56" class="detail">В коде</text>
+  <rect x="790" y="43" width="17" height="17" rx="3" class="future"/>
+  <text x="816" y="56" class="detail">В плане</text>
+  <path d="M40 81h880" stroke="#d7d7d7"/>
 
-  <circle cx="45" cy="96" r="4" fill="#8ee8ce"/>
-  <text x="58" y="101" class="current">Сейчас</text>
-  <path class="rule" d="M148 96h772"/>
-  <path class="link" d="M241 178h23"/>
-  <path class="link" d="M469 178h23"/>
-  <path class="link" d="M697 178h23"/>
-
-  <g>
-    <rect x="40" y="122" width="196" height="112" rx="14" class="ready"/>
-    <text x="58" y="158" class="title">Chromium</text>
-    <text x="58" y="184" class="detail">Открывает выдачу</text>
-    <text x="58" y="203" class="detail">и карточки HH</text>
-  </g>
-  <g>
-    <rect x="268" y="122" width="196" height="112" rx="14" class="ready"/>
-    <text x="286" y="158" class="title">Сборщик HH</text>
-    <text x="286" y="184" class="detail">Читает HTML,</text>
-    <text x="286" y="203" class="detail">убирает повторы по ID</text>
-  </g>
-  <g>
-    <rect x="496" y="122" width="196" height="112" rx="14" class="ready"/>
-    <text x="514" y="158" class="title">SQLite</text>
-    <text x="514" y="184" class="detail">Хранит вакансии</text>
-    <text x="514" y="203" class="detail">и историю запусков</text>
-  </g>
-  <g>
-    <rect x="724" y="122" width="196" height="112" rx="14" class="ready"/>
-    <text x="742" y="158" class="title">JSON</text>
-    <text x="742" y="184" class="detail">Выгрузка карточек</text>
-    <text x="742" y="203" class="detail">для обработки</text>
-  </g>
-
-  <circle cx="45" cy="273" r="4" fill="#99aee6"/>
-  <text x="58" y="278" class="planned">Дальше</text>
-  <path class="rule" d="M148 273h772"/>
+  <path class="link" d="M317 158h22"/>
+  <path class="link" d="M480 215v26"/>
+  <path class="link" d="M784 215v12q0 4-4 4H580q-4 0-4 4v6"/>
+  <path class="link" d="M480 355v26"/>
+  <path class="link" d="M317 438h22" marker-start="url(#arrow)"/>
+  <path class="link" d="M621 438h22"/>
+  <path class="link" d="M784 495v26"/>
+  <path class="link" d="M643 578h-22"/>
+  <path class="link" d="M339 578h-22"/>
 
   <g>
-    <rect x="40" y="297" width="272" height="112" rx="14" class="future"/>
-    <text x="58" y="333" class="title">Ручной импорт</text>
-    <text x="58" y="359" class="detail">Загрузка тестовых карточек</text>
-    <text x="58" y="378" class="detail">Проверка обработки данных</text>
+    <rect x="40" y="106" width="272" height="104" rx="12" class="ready"/>
+    <text x="58" y="141" class="title">Оркестратор</text>
+    <text x="58" y="166" class="detail">Запуски и расписание</text>
+    <text x="58" y="185" class="detail">Статусы запусков</text>
   </g>
   <g>
-    <rect x="344" y="297" width="272" height="112" rx="14" class="future"/>
-    <text x="362" y="333" class="title">Нормализация</text>
-    <text x="362" y="359" class="detail">Справочник профессий и навыков</text>
-    <text x="362" y="378" class="detail">Проверка правил и дублей</text>
+    <rect x="344" y="106" width="272" height="104" rx="12" class="ready"/>
+    <text x="362" y="141" class="title">Модуль сбора</text>
+    <text x="362" y="166" class="detail">Независимые адаптеры</text>
+    <text x="362" y="185" class="detail">для разных источников</text>
   </g>
   <g>
-    <rect x="648" y="297" width="272" height="112" rx="14" class="future"/>
-    <text x="666" y="333" class="title">Аналитика</text>
-    <text x="666" y="359" class="detail">Сводки по профессиям</text>
-    <text x="666" y="378" class="detail">и спросу на навыки</text>
+    <rect x="648" y="106" width="272" height="104" rx="12" class="future"/>
+    <text x="666" y="141" class="title">Ручной импорт</text>
+    <text x="666" y="166" class="detail">Карточки для проверки</text>
+    <text x="666" y="185" class="detail">нормализации и аналитики</text>
+  </g>
+
+  <g>
+    <rect x="344" y="246" width="272" height="104" rx="12" class="ready"/>
+    <text x="362" y="281" class="title">Исходные вакансии</text>
+    <text x="362" y="306" class="detail">Описания и метаданные</text>
+    <text x="362" y="325" class="detail">в общей базе SQLite</text>
+  </g>
+
+  <g>
+    <rect x="40" y="386" width="272" height="104" rx="12" class="future"/>
+    <text x="58" y="421" class="title">Справочники</text>
+    <text x="58" y="446" class="detail">Единые названия</text>
+    <text x="58" y="465" class="detail">профессий и навыков</text>
+  </g>
+  <g>
+    <rect x="344" y="386" width="272" height="104" rx="12" class="future"/>
+    <text x="362" y="421" class="title">Нормализация</text>
+    <text x="362" y="446" class="detail">Профессия и навыки</text>
+    <text x="362" y="465" class="detail">из описания вакансии</text>
+  </g>
+  <g>
+    <rect x="648" y="386" width="272" height="104" rx="12" class="future"/>
+    <text x="666" y="421" class="title">Проверка правил</text>
+    <text x="666" y="446" class="detail">Разметка требований</text>
+    <text x="666" y="465" class="detail">Дубли между источниками</text>
+  </g>
+
+  <g>
+    <rect x="40" y="526" width="272" height="104" rx="12" class="future"/>
+    <text x="58" y="561" class="title">Результаты</text>
+    <text x="58" y="586" class="detail">Сводки по спросу</text>
+    <text x="58" y="605" class="detail">на профессии и навыки</text>
+  </g>
+  <g>
+    <rect x="344" y="526" width="272" height="104" rx="12" class="future"/>
+    <text x="362" y="561" class="title">Модуль аналитики</text>
+    <text x="362" y="586" class="detail">Расчёт показателей</text>
+    <text x="362" y="605" class="detail">по проверенным данным</text>
+  </g>
+  <g>
+    <rect x="648" y="526" width="272" height="104" rx="12" class="future"/>
+    <text x="666" y="561" class="title">Проверенные данные</text>
+    <text x="666" y="586" class="detail">Нормализованные вакансии</text>
+    <text x="666" y="605" class="detail">и связи с навыками</text>
   </g>
 </svg>
