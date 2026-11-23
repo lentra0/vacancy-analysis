@@ -64,18 +64,39 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      VERSION_SERIES: '0.1'
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
       - name: Добавить файлы в релиз
         run: |
-          tag="build-${GITHUB_RUN_NUMBER}"
-          files=(dist/vacancy-analysis-linux-x64 dist/vacancy-analysis-windows-x64.exe)
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "${files[@]}" --clobber
+          version="v${VERSION_SERIES}.${GITHUB_RUN_NUMBER}"
+          linux="dist/vacancy-analysis-${version}-linux-x64"
+          windows="dist/vacancy-analysis-${version}-windows-x64.exe"
+          mv dist/vacancy-analysis-linux-x64 "$linux"
+          mv dist/vacancy-analysis-windows-x64.exe "$windows"
+
+          subject=$(git show -s --format=%s "$GITHUB_SHA")
+          notes="$RUNNER_TEMP/release-notes.md"
+          printf 'Коммит сборки [`%s`](%s/%s/commit/%s)\n\n%s\n' \
+            "${GITHUB_SHA:0:12}" "$GITHUB_SERVER_URL" "$GH_REPO" "$GITHUB_SHA" "$subject" > "$notes"
+
+          if tagged_sha=$(gh api "repos/$GH_REPO/commits/$version" --jq .sha 2>/dev/null); then
+            if [[ "$tagged_sha" != "$GITHUB_SHA" ]]; then
+              printf 'Версия %s уже указывает на коммит %s\n' "$version" "$tagged_sha" >&2
+              exit 1
+            fi
+          fi
+          if gh release view "$version" >/dev/null 2>&1; then
+            gh release upload "$version" "$linux" "$windows" --clobber
+            gh release edit "$version" --title "$version" --notes-file "$notes"
           else
-            gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
-              --title "Сборка ${GITHUB_RUN_NUMBER}" --generate-notes
+            gh release create "$version" "$linux" "$windows" --target "$GITHUB_SHA" \
+              --title "$version" --notes-file "$notes"
           fi
