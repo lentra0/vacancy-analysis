@@ -1,43 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300" role="img" aria-labelledby="title desc">
-  <title id="title">Сбор вакансий HH</title>
-  <desc id="desc">Сборщик читает выдачу и карточки через Chromium или API. Карточки и результаты запусков сохраняются в SQLite. Команда export читает из базы список карточек.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="424" viewBox="0 0 960 424" role="img" aria-labelledby="title desc">
+  <title id="title">Как проходит сбор HH</title>
+  <desc id="desc">Сборщик открывает выдачу, читает карточки и записывает их в SQLite. Ошибка карточки даёт частичный результат. Капча или ограничение доступа останавливает сбор.</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-      <path d="M0 0 10 5 0 10Z" fill="#607386"/>
+    <linearGradient id="background" x2="1" y2="1">
+      <stop stop-color="#17243b"/>
+      <stop offset="1" stop-color="#10182a"/>
+    </linearGradient>
+    <marker id="chevron" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="m2 1 4 3-4 3" fill="none" stroke="#6fa5a7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </marker>
     <style>
-      text { font: 16px system-ui, sans-serif; fill: #192d3e; }
-      .heading { font-size: 25px; font-weight: 650; }
-      .detail { font-size: 13px; fill: #435869; }
-      .box { fill: #d9efe9; stroke: #3f8378; stroke-width: 1.5; }
-      .line { fill: none; stroke: #607386; stroke-width: 1.6; marker-end: url(#arrow); }
+      text { font-family: Inter, "DejaVu Sans", sans-serif; }
+      .heading { fill: #f3f7ff; font-size: 30px; font-weight: 700; }
+      .title { fill: #f3f7ff; font-size: 18px; font-weight: 650; }
+      .detail { fill: #b3c4db; font-size: 13px; }
+      .label { fill: #b8c9e5; font-size: 15px; font-weight: 650; }
+      .card { fill: #182f3b; stroke: #457666; }
+      .error { fill: #30283b; stroke: #70546c; }
+      .rule { stroke: #334564; }
+      .link { stroke: #6fa5a7; stroke-width: 1.5; marker-end: url(#chevron); }
     </style>
   </defs>
-  <rect width="900" height="300" rx="16" fill="#f8fafc"/>
-  <text x="36" y="44" class="heading">Сбор вакансий HH</text>
 
-  <path class="line" d="M204 162H228V114H249"/>
-  <path class="line" d="M204 162H228V210H249"/>
-  <path class="line" d="M442 114H466V162H487"/>
-  <path class="line" d="M442 210H466V162H487"/>
-  <path class="line" d="M683 162H716"/>
+  <rect width="960" height="424" rx="24" fill="url(#background)"/>
+  <text x="40" y="61" class="heading">Как проходит сбор HH</text>
 
-  <rect class="box" x="36" y="132" width="168" height="60" rx="10"/>
-  <rect class="box" x="250" y="84" width="192" height="60" rx="10"/>
-  <rect class="box" x="250" y="180" width="192" height="60" rx="10"/>
-  <rect class="box" x="488" y="132" width="195" height="60" rx="10"/>
-  <rect class="box" x="717" y="132" width="147" height="60" rx="10"/>
+  <path class="link" d="M317 153h23"/>
+  <path class="link" d="M621 153h23"/>
+  <g>
+    <rect x="40" y="94" width="272" height="118" rx="14" class="card"/>
+    <text x="58" y="132" class="title">Выдача</text>
+    <text x="58" y="159" class="detail">Поиск по запросу и региону</text>
+    <text x="58" y="178" class="detail">Переход по страницам</text>
+  </g>
+  <g>
+    <rect x="344" y="94" width="272" height="118" rx="14" class="card"/>
+    <text x="362" y="132" class="title">Карточки</text>
+    <text x="362" y="159" class="detail">Заголовок, дата и HTML описания</text>
+    <text x="362" y="178" class="detail">Работодатель, навыки и зарплата</text>
+  </g>
+  <g>
+    <rect x="648" y="94" width="272" height="118" rx="14" class="card"/>
+    <text x="666" y="132" class="title">Запись</text>
+    <text x="666" y="159" class="detail">Обновление карточек по ID</text>
+    <text x="666" y="178" class="detail">Итог и счётчики запуска</text>
+  </g>
 
-  <g text-anchor="middle">
-    <text x="120" y="156">Запуск сбора</text>
-    <text class="detail" x="120" y="176">Запрос и регион</text>
-    <text x="346" y="108">Chromium</text>
-    <text class="detail" x="346" y="128">HTML выдачи и карточек</text>
-    <text x="346" y="204">API HH</text>
-    <text class="detail" x="346" y="224">JSON по окну дат</text>
-    <text x="585" y="156">SQLite</text>
-    <text class="detail" x="585" y="176">Карточки и итоги запусков</text>
-    <text x="790" y="156">Выгрузка</text>
-    <text class="detail" x="790" y="176">Массив JSON</text>
+  <text x="40" y="254" class="label">Если HH вернул ошибку</text>
+  <path class="rule" d="M272 249h648"/>
+
+  <g>
+    <rect x="40" y="273" width="424" height="110" rx="14" class="error"/>
+    <text x="58" y="310" class="title">Сбой карточки</text>
+    <text x="58" y="337" class="detail">Ошибка попадёт в отчёт запуска,</text>
+    <text x="58" y="356" class="detail">остальные карточки сохранятся</text>
+  </g>
+  <g>
+    <rect x="496" y="273" width="424" height="110" rx="14" class="error"/>
+    <text x="514" y="310" class="title">Капча или блокировка</text>
+    <text x="514" y="337" class="detail">Сбор остановится, уже записанные</text>
+    <text x="514" y="356" class="detail">карточки останутся в SQLite</text>
   </g>
 </svg>
