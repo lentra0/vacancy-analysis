@@ -4,17 +4,21 @@
 
 ## Запуск
 
-Скачайте файл для своей системы из [Releases](https://github.com/lentra0/vacancy-analysis/releases). В Windows запускайте из PowerShell, в Linux дайте файлу право на запуск. Chromium входит в сборку. На Linux нужны его системные библиотеки.
+Скачайте файл для своей системы из [Releases](https://github.com/lentra0/vacancy-analysis/releases) и подставьте его версию в команды ниже. Chromium входит в сборку. На Linux нужны его системные библиотеки.
 
 ```powershell
-.\vacancy-analysis-windows-x64.exe run --text DevOps --area 1 --limit 5
-.\vacancy-analysis-windows-x64.exe export > vacancies.json
+$version = 'v0.1.6'
+$app = ".\vacancy-analysis-${version}-windows-x64.exe"
+& $app run --text DevOps --area 1 --limit 5
+& $app export > vacancies.json
 ```
 
 ```sh
-chmod +x vacancy-analysis-linux-x64
-./vacancy-analysis-linux-x64 run --text DevOps --area 1 --limit 5
-./vacancy-analysis-linux-x64 export > vacancies.json
+version=v0.1.6
+app="./vacancy-analysis-${version}-linux-x64"
+chmod +x "$app"
+"$app" run --text DevOps --area 1 --limit 5
+"$app" export > vacancies.json
 ```
 
 Для запуска из исходников нужен Python 3.11 или новее. После установки используйте `python -m vacancy_analysis` с теми же параметрами.
