@@ -1,4 +1,3 @@
-from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -34,13 +33,14 @@ class TestPages(BaseHTTPRequestHandler):
 
 
 def main(executable: Path) -> None:
-    with closing(ThreadingHTTPServer(("127.0.0.1", 0), TestPages)) as server:
+    with ThreadingHTTPServer(("127.0.0.1", 0), TestPages) as server:
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
             with tempfile.TemporaryDirectory() as temporary:
                 base_url = f"http://127.0.0.1:{server.server_port}"
                 env = dict(os.environ, VACANCY_ANALYSIS_HH_BASE_URL=base_url)
+                env.pop("PLAYWRIGHT_BROWSERS_PATH", None)
                 command = [str(executable.resolve()), "--db", str(Path(temporary) / "smoke.sqlite3")]
                 run = subprocess.run(
                     [*command, "run", "--text", "DevOps", "--area", "1", "--limit", "2", "--delay", "1"],
@@ -59,11 +59,12 @@ def main(executable: Path) -> None:
                     raise SystemExit(exported)
                 if any(row["source"] != "hh" or not row["description_raw"] for row in rows):
                     raise SystemExit(exported)
-                print("JSON: 2 вакансии с тестовых страниц.")
+                print("Exported 2 vacancies as JSON.")
         finally:
             server.shutdown()
             thread.join()
 
 
 if __name__ == "__main__":
+    sys.stderr.reconfigure(encoding="utf-8")
     main(Path(sys.argv[1]))
