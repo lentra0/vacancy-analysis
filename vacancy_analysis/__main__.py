@@ -11,9 +11,12 @@ import sys
 import time
 
 from .models import CollectionError, SearchQuery, Window
+from .progress import TerminalProgress
 from .sources.hh import LOGIN, SITE, HHWebClient, browser_tab, load_page
 from .orchestrator import collect
 from .storage import Storage
+
+DEFAULT_HH_PROFILE = Path("data/hh-profile")
 
 
 def positive_int(value: str) -> int:
@@ -27,6 +30,16 @@ def print_json(value: dict | list) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2), flush=True)
 
 
+def confirm_hh_check(progress: TerminalProgress, reason: str) -> bool:
+    progress.clear()
+    print(f"{reason}. Пройдите проверку в Chromium и нажмите Enter.", file=sys.stderr, flush=True)
+    try:
+        input()
+    except EOFError:
+        return False
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Анализ рынка вакансий")
     parser.add_argument("--db", type=Path, default=Path("data/vacancies.sqlite3"),
@@ -37,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     for command in (run, watch):
         command.add_argument("--text", required=True, help="поисковый запрос")
         command.add_argument("--area", help="ID региона HH")
-        command.add_argument("--profile", type=Path, help="каталог профиля Chromium")
+        command.add_argument("--profile", type=Path, help="каталог профиля Chromium (по умолчанию data/hh-profile, если есть)")
         command.add_argument("--headed", action="store_true", help="показать окно Chromium")
         command.add_argument("--limit", type=positive_int, default=25, help="до N карточек (по умолчанию 25)")
         command.add_argument("--pages", type=positive_int, default=3, help="до N страниц (по умолчанию 3)")
@@ -45,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--delay", type=positive_int, default=5, help="пауза в секундах (по умолчанию 5)")
     watch.add_argument("--interval", required=True, type=positive_int, help="секунды после завершения запуска")
     login = commands.add_parser("login", help="войти в HH через Chromium")
-    login.add_argument("--profile", type=Path, default=Path("data/hh-profile"),
+    login.add_argument("--profile", type=Path, default=DEFAULT_HH_PROFILE,
                        help="каталог профиля (по умолчанию data/hh-profile)")
     runs = commands.add_parser("runs", help="показать результаты запусков")
     runs.add_argument("--limit", type=positive_int, default=10, help="число запусков (по умолчанию 10)")
@@ -61,7 +74,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.command == "login":
                 page = stack.enter_context(browser_tab(args.profile, headed=True))
                 load_page(page, LOGIN)
-                print("Войдите в HH в окне Chromium и нажмите Enter здесь.", file=sys.stderr, flush=True)
+                print(f"Войдите в HH в окне Chromium и нажмите Enter. Профиль сохранится в {args.profile}.",
+                      file=sys.stderr, flush=True)
                 input()
                 return 0
             storage = stack.enter_context(closing(Storage(args.db)))
@@ -72,10 +86,17 @@ def main(argv: list[str] | None = None) -> int:
                 print_json(storage.vacancies(args.limit))
                 return 0
             query = SearchQuery(args.text.strip(), args.area)
-            page = stack.enter_context(browser_tab(args.profile, args.headed))
+            profile = args.profile
+            if profile is None and (args.headed or DEFAULT_HH_PROFILE.is_dir()):
+                profile = DEFAULT_HH_PROFILE
+            progress = stack.enter_context(TerminalProgress(sys.stderr))
+            progress.show("Запускаю Chromium")
+            page = stack.enter_context(browser_tab(profile, args.headed))
             client = HHWebClient(
                 partial(load_page, page), pages=args.pages, period=args.period, delay=args.delay,
                 base_url=os.getenv("VACANCY_ANALYSIS_HH_BASE_URL", SITE).rstrip("/"),
+                progress=progress.show,
+                confirm_check=partial(confirm_hh_check, progress) if args.headed and sys.stdin.isatty() else None,
             )
             while True:
                 now = datetime.now(timezone.utc)
@@ -84,9 +105,11 @@ def main(argv: list[str] | None = None) -> int:
                     client, storage, query, window,
                     card_limit=args.limit, new_only=args.command == "watch",
                 )
+                progress.clear()
                 print_json(result)
                 if args.command == "run" or result["blocked"]:
                     return {"ok": 0, "partial": 2, "failed": 1}[result["status"]]
+                progress.show(f"Пауза между запусками, {args.interval} с")
                 time.sleep(args.interval)
     except KeyboardInterrupt:
         return 130
@@ -96,8 +119,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_cli() -> int:
-    if isinstance(sys.stdout, TextIOWrapper):
-        sys.stdout.reconfigure(encoding="utf-8")
+    for output in (sys.stdout, sys.stderr):
+        if isinstance(output, TextIOWrapper):
+            output.reconfigure(encoding="utf-8")
     return main()
 
 
