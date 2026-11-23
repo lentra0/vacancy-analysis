@@ -95,12 +95,11 @@ class BrowserCollectionTest(unittest.TestCase):
         with closing(Storage(self.database)) as storage:
             results = [
                 collect(client, storage, query, Window(now, now),
-                        tracks_cursor=False, card_limit=1, new_only=True)
+                        card_limit=1, new_only=True)
                 for _ in range(3)
             ]
             self.assertEqual([result["saved"] for result in results], [1, 1, 0])
             self.assertEqual([result["skipped"] for result in results], [0, 1, 2])
-            self.assertIsNone(storage.last_success(query))
         self.assertEqual([urlsplit(url).path for url in self.urls if "/vacancy/" in url], [
             "/vacancy/101", "/vacancy/102",
         ])

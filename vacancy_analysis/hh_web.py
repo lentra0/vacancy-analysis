@@ -10,7 +10,7 @@ import re
 import time
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
-from .hh import HHBlocked, HHError, HHQuery, Window
+from .hh import HHBlocked, HHError, HHQuery
 
 SITE = "https://hh.ru"
 LOGIN = f"{SITE}/account/login"
@@ -250,7 +250,7 @@ class HHWebClient:
             raise HHBlocked("HH запросил капчу")
         return markup, final_url
 
-    def vacancy_ids(self, query: HHQuery, window: Window) -> Iterator[str]:
+    def vacancy_ids(self, query: HHQuery) -> Iterator[str]:
         params = {"text": query.text, "order_by": "publication_time", "search_period": self.period}
         if query.area:
             params["area"] = query.area
