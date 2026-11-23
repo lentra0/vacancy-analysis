@@ -7,7 +7,7 @@ import unittest
 from urllib.parse import urlsplit
 
 from vacancy_analysis.models import SearchQuery, Vacancy, Window
-from vacancy_analysis.sources.hh import HHWebClient
+from vacancy_analysis.sources.hh import HHWebClient, LoadedPage
 from vacancy_analysis.orchestrator import collect
 from vacancy_analysis.storage import SCHEMA, Storage
 
@@ -31,9 +31,9 @@ class PipelineTest(unittest.TestCase):
         def load(url):
             part = urlsplit(url).path
             if part == "/search/vacancy":
-                return 200, url, self.search
+                return LoadedPage(200, url, self.search)
             status, html = cards[part.rsplit("/", 1)[-1]]
-            return status, url, html
+            return LoadedPage(status, url, html)
 
         client = HHWebClient(load, pages=1, delay=0)
         return collect(client, self.storage, self.query, self.window)

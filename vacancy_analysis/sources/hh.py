@@ -23,6 +23,16 @@ MONTHS = "января февраля марта апреля мая июня и
 TITLE_KEYS = ("serp-item__title", "vacancy-serp__vacancy-title", "serp-item-title")
 NEXT_KEYS = ("pager-next", "pagination-next", "pagination-next-page")
 EMPTY_KEYS = ("vacancy-serp__no-results", "vacancy-serp__results-empty")
+CAPTCHA_PATHS = {"/captcha", "/account/captcha"}
+CAPTCHA_INPUTS = 'input[data-qa="captcha-input"], [data-qa="captcha-input"] input, input[name="captchaText"]'
+
+
+@dataclass(frozen=True)
+class LoadedPage:
+    status: int
+    url: str
+    html: str
+    captcha_visible: bool = False
 
 
 @dataclass
@@ -221,7 +231,7 @@ class HHWebClient:
 
     def __init__(
         self,
-        load: Callable[[str], tuple[int, str, str]],
+        load: Callable[[str], LoadedPage],
         *,
         pages: int = 3,
         period: int = 1,
@@ -250,28 +260,28 @@ class HHWebClient:
         if self.progress:
             self.progress(stage)
         try:
-            status, final_url, html = self.load(url)
+            loaded = self.load(url)
         finally:
             self.last_loaded = time.monotonic()
+        status, final_url = loaded.status, loaded.url
         path = urlsplit(final_url).path
         if not site_url(self.base_url, final_url):
             raise CollectionError(f"Неожиданное перенаправление: {final_url}")
         if status == 429:
             raise AccessBlocked(f"HH ограничил доступ (HTTP {status}): {path}")
+        if loaded.captcha_visible:
+            raise HHCheckRequired("HH запросил капчу")
+        if path.rstrip("/") in CAPTCHA_PATHS:
+            raise AccessBlocked(f"Страница проверки HH без видимого поля ввода (HTTP {status}): {path}")
         if path.startswith("/account/login"):
             raise HHCheckRequired("HH попросил войти в аккаунт")
-        markup = Markup(html)
-        if path.startswith("/captcha") or markup.first("captcha", "captcha-image", "captcha-input") or (
-            "вы не робот" in markup.text("body").lower()
-        ):
-            raise HHCheckRequired("HH запросил капчу")
         if status in {401, 403}:
             raise AccessBlocked(f"HH ограничил доступ (HTTP {status}): {path}")
         if status == 404:
             raise VacancyUnavailable(f"{path}: HTTP 404")
         if status >= 400:
             raise CollectionError(f"{path}: HTTP {status}")
-        return markup, final_url
+        return Markup(loaded.html), final_url
 
     def _get(self, url: str, stage: str) -> tuple[Markup, str]:
         try:
@@ -380,13 +390,19 @@ def browser_tab(profile: Path | None, headed: bool):
         raise CollectionError(f"Chromium: {error.message}") from error
 
 
-def load_page(page, url: str) -> tuple[int, str, str]:
+def load_page(page, url: str) -> LoadedPage:
     from playwright.sync_api import Error
 
     try:
         response = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
         if response is None:
             raise CollectionError(f"Браузер не получил ответ: {url}")
-        return response.status, page.url, page.content()
+        captcha_visible = page.locator(CAPTCHA_INPUTS).evaluate_all("""
+            fields => fields.some(field =>
+                field.offsetWidth > 0 && field.offsetHeight > 0 &&
+                field.checkVisibility({opacityProperty: true, visibilityProperty: true})
+            )
+        """)
+        return LoadedPage(response.status, page.url, page.content(), captcha_visible)
     except Error as error:
         raise CollectionError(f"Не удалось открыть {url}: {error.message}") from error

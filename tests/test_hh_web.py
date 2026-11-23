@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from vacancy_analysis.__main__ import data_path, main
 from vacancy_analysis.models import SearchQuery, Window
-from vacancy_analysis.sources.hh import HHWebClient, Markup, browser_tab, load_page, vacancy_data
+from vacancy_analysis.sources.hh import HHWebClient, LoadedPage, Markup, browser_tab, load_page, vacancy_data
 from vacancy_analysis.orchestrator import collect
 from vacancy_analysis.progress import TerminalProgress
 from vacancy_analysis.storage import Storage
@@ -68,7 +68,7 @@ class BrowserCollectionTest(unittest.TestCase):
             self.enterContext(patch("vacancy_analysis.__main__.browser_tab", fixture_tab))
             self.enterContext(patch(
                 "vacancy_analysis.__main__.load_page",
-                side_effect=lambda _, url: (200, url, self.serve(url)),
+                side_effect=lambda _, url: LoadedPage(200, url, self.serve(url)),
             ))
         self.enterContext(patch("vacancy_analysis.sources.hh.time.sleep"))
 
@@ -91,7 +91,7 @@ class BrowserCollectionTest(unittest.TestCase):
         self.assertEqual(len(self.call_cli("export", "--limit", "1")[1]), 1)
 
     def test_watch_skips_saved_cards_and_keeps_limit(self):
-        client = HHWebClient(lambda url: (200, url, self.serve(url)), delay=0)
+        client = HHWebClient(lambda url: LoadedPage(200, url, self.serve(url)), delay=0)
         query = SearchQuery("DevOps", "1")
         now = datetime.now(timezone.utc)
         with closing(Storage(self.database)) as storage:
@@ -108,8 +108,9 @@ class BrowserCollectionTest(unittest.TestCase):
 
     def test_captcha_stops_run_and_preserves_saved_cards(self):
         def load(url):
-            html = '<body><input data-qa="captcha-input"></body>'
-            return (200, url, html if "/vacancy/102" in url else self.serve(url))
+            if "/vacancy/102" in url:
+                return LoadedPage(200, url, '<body><input data-qa="captcha-input"></body>', captcha_visible=True)
+            return LoadedPage(200, url, self.serve(url))
 
         now = datetime.now(timezone.utc)
         client = HHWebClient(load, delay=0)
@@ -124,8 +125,9 @@ class BrowserCollectionTest(unittest.TestCase):
 
         def load(url):
             if checked:
-                return 200, url, self.serve(url)
-            return 403, "https://hh.ru/captcha", '<body><input data-qa="captcha-input"></body>'
+                return LoadedPage(200, url, self.serve(url))
+            return LoadedPage(403, "https://hh.ru/account/captcha",
+                              '<body><input name="captchaText"></body>', captcha_visible=True)
 
         def confirm(reason):
             checked.append(reason)
@@ -135,12 +137,36 @@ class BrowserCollectionTest(unittest.TestCase):
         self.assertEqual(list(client.vacancy_ids(SearchQuery("DevOps"))), ["101", "101"])
         self.assertEqual(checked, ["HH запросил капчу"])
 
-        client = HHWebClient(lambda url: (429, url, ""), delay=0, confirm_check=confirm)
+        client = HHWebClient(lambda url: LoadedPage(429, url, ""), delay=0, confirm_check=confirm)
         now = datetime.now(timezone.utc)
         with closing(Storage(self.database)) as storage:
             result = collect(client, storage, SearchQuery("DevOps"), Window(now, now))
         self.assertTrue(result["blocked"])
         self.assertEqual(len(checked), 1)
+
+    def test_inaccessible_page_without_visible_captcha_never_prompts(self):
+        now = datetime.now(timezone.utc)
+        for url, status, error in (
+            ("https://hh.ru/search/vacancy", 403, "HH ограничил доступ (HTTP 403): /search/vacancy"),
+            ("https://hh.ru/account/captcha", 200,
+             "Страница проверки HH без видимого поля ввода (HTTP 200): /account/captcha"),
+        ):
+            with self.subTest(url=url), closing(Storage(self.database)) as storage:
+                client = HHWebClient(lambda _: LoadedPage(status, url, SEARCH), delay=0,
+                                     confirm_check=lambda _: self.fail("Неожиданное приглашение пройти капчу"))
+                result = collect(client, storage, SearchQuery("DevOps"), Window(now, now))
+                self.assertTrue(result["blocked"])
+                self.assertEqual(result["errors"]["run"], error)
+
+    @unittest.skipUnless(os.getenv("HH_TEST_CHROMIUM") == "1", "Требуется Chromium")
+    def test_browser_checks_if_captcha_input_is_visible(self):
+        with browser_tab(None, headed=False) as page:
+            page.route("https://hh.ru/**", lambda route: route.fulfill(
+                content_type="text/html; charset=utf-8",
+                body='<input name="captchaText">' if "/account/captcha" in route.request.url else SEARCH,
+            ))
+            self.assertFalse(load_page(page, "https://hh.ru/search/vacancy").captcha_visible)
+            self.assertTrue(load_page(page, "https://hh.ru/account/captcha").captcha_visible)
 
     def test_run_reuses_profile_from_login(self):
         data_dir = self.database.parent / "vacancy-analysis-data"
@@ -183,7 +209,7 @@ class BrowserCollectionTest(unittest.TestCase):
         if os.getenv("HH_TEST_CHROMIUM") != "1":
             self.enterContext(patch(
                 "vacancy_analysis.__main__.load_page",
-                side_effect=lambda _, url: (200, url, "" if "/account/login" in url else self.serve(url)),
+                side_effect=lambda _, url: LoadedPage(200, url, "" if "/account/login" in url else self.serve(url)),
             ))
         self.enterContext(patch("vacancy_analysis.sources.hh.time.sleep"))
         with redirect_stderr(StringIO()):

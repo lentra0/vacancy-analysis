@@ -2,6 +2,10 @@
 <html lang="ru">
 <head><meta charset="utf-8"><title>Поиск вакансий</title></head>
 <body>
+<div hidden data-qa="captcha">
+  <label>Подтвердите, что вы не робот <input data-qa="captcha-input"></label>
+</div>
+<div style="opacity: 0"><input name="captchaText"></div>
 <main>
   <a data-qa="serp-item__title" href="/vacancy/101?hhtmFrom=vacancy_search_list">DevOps-инженер</a>
   <a data-qa="serp-item__title" href="/vacancy/101">DevOps-инженер</a>
