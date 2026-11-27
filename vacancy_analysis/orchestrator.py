@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import asdict
 import sqlite3
 from typing import Protocol
@@ -27,6 +27,7 @@ def collect(
     *,
     card_limit: int | None = None,
     new_only: bool = False,
+    on_saved: Callable[[Vacancy, Collection], None] | None = None,
 ) -> dict:
     run_id = uuid4().hex
     storage.start(run_id, client.source, query, window)
@@ -58,6 +59,8 @@ def collect(
             else:
                 storage.save(run_id, client.source, vacancy)
                 outcome.saved += 1
+                if on_saved is not None:
+                    on_saved(vacancy, outcome)
             if card_limit is not None and outcome.found == card_limit:
                 break
 
