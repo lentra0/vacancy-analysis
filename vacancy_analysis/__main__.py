@@ -2,6 +2,7 @@ import argparse
 from contextlib import ExitStack, closing
 from datetime import datetime, timedelta, timezone
 from functools import partial
+from tempfile import NamedTemporaryFile
 from io import TextIOWrapper
 import json
 import os
@@ -49,6 +50,23 @@ def confirm_hh_check(progress: TerminalProgress, reason: str) -> bool:
     return True
 
 
+def export_snapshot(storage: Storage, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as output:
+        temporary = Path(output.name)
+        try:
+            for record in storage.vacancies(None):
+                output.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except BaseException:
+            output.close()
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     default_profile = data_path("hh-profile")
     parser = argparse.ArgumentParser(description="Анализ рынка вакансий")
@@ -65,8 +83,9 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--limit", type=positive_int, default=25, help="до N карточек (по умолчанию 25)")
         command.add_argument("--pages", type=positive_int, default=3, help="до N страниц (по умолчанию 3)")
         command.add_argument("--period", type=int, choices=(1, 3, 7, 30), default=1, help="дней в выдаче (по умолчанию 1)")
-        command.add_argument("--delay", type=positive_int, default=5, help="пауза в секундах (по умолчанию 5)")
-    watch.add_argument("--interval", required=True, type=positive_int, help="секунды после завершения запуска")
+        command.add_argument("--delay", type=positive_int, default=10, help="пауза в секундах (по умолчанию 10)")
+    watch.add_argument("--interval", default=300, type=positive_int, help="секунды после завершения запуска")
+    watch.add_argument("--output", type=Path, default=Path("data/vacancies.jsonl"))
     login = commands.add_parser("login", help="войти в HH через Chromium")
     login.add_argument("--profile", type=Path, default=default_profile,
                        help="каталог профиля (по умолчанию vacancy-analysis-data/hh-profile)")
@@ -74,6 +93,10 @@ def main(argv: list[str] | None = None) -> int:
     runs.add_argument("--limit", type=positive_int, default=10, help="число запусков (по умолчанию 10)")
     export = commands.add_parser("export", help="выгрузить вакансии в JSON")
     export.add_argument("--limit", type=positive_int, help="число вакансий (по умолчанию все)")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    index = 2 if argv and argv[0] == "--db" else (1 if argv and argv[0].startswith("--db=") else 0)
+    if index < len(argv) and argv[index] not in {"run", "watch", "login", "runs", "export", "-h", "--help"}:
+        argv.insert(index, "watch")
     args = parser.parse_args(argv)
 
     if args.command in {"run", "watch"} and not args.text.strip():
@@ -108,19 +131,33 @@ def main(argv: list[str] | None = None) -> int:
                 progress=progress.show,
                 confirm_check=partial(confirm_hh_check, progress) if args.headed and sys.stdin.isatty() else None,
             )
+            cycle = total = failures = 0
+            if args.command == "watch":
+                export_snapshot(storage, args.output)
             while True:
+                cycle += 1
                 now = datetime.now(timezone.utc)
                 window = Window(now - timedelta(days=args.period), now)
                 result = collect(
                     client, storage, query, window,
                     card_limit=args.limit, new_only=args.command == "watch",
+                    on_saved=(lambda vacancy, outcome: (export_snapshot(storage, args.output), progress.show(f"Цикл {cycle} | Сохранено {total + outcome.saved} | {vacancy.title[:60]}"))) if args.command == "watch" else None,
                 )
-                progress.clear()
-                print_json(result)
-                if args.command == "run" or result["blocked"]:
+                if args.command == "run":
+                    progress.clear()
+                    print_json(result)
                     return {"ok": 0, "partial": 2, "failed": 1}[result["status"]]
-                progress.show(f"Пауза между запусками, {args.interval} с")
-                time.sleep(args.interval)
+                total += result["saved"]
+                export_snapshot(storage, args.output)
+                if result["blocked"]:
+                    progress.clear()
+                    print("Сбор остановлен: HH ограничил доступ. Проверьте сессию вручную.", file=sys.stderr)
+                    return 1
+                failures = failures + 1 if result["status"] != "ok" else 0
+                delay = args.interval * (2 ** min(failures, 5))
+                for remaining in range(delay, 0, -1):
+                    progress.show(f"Цикл {cycle} | Сохранено {total} | Пропущено {result['skipped']} | Следующий сбор через {remaining} с")
+                    time.sleep(1)
     except KeyboardInterrupt:
         return 130
     except (EOFError, CollectionError, OSError, sqlite3.Error) as error:
